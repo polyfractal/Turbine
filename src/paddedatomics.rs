@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use std::sync::atomics::{AtomicInt, SeqCst, Release, Acquire};
+use std::fmt::{Formatter, Result, Show};
 
 
 //------------------------- Padded 64 -------------------------//
@@ -48,4 +49,11 @@ impl Padded64 {
 	pub fn and(&self, x: int) -> int {
 		self.counter.fetch_and(x, Release)
 	}
+}
+
+impl Show for Padded64 {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(f.buf, "{}", self.counter.load(Acquire))
+				//write!(f.buf, "{}", 0)
+    }
 }

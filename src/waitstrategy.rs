@@ -1,34 +1,78 @@
 
 use eventprocessor::EventProcessor;
 use paddedatomics::Padded64;
-use std::cmp::min;
+use std::cmp::{min, max};
 
 
 pub trait WaitStrategy {
-	fn new() -> Self;
-	fn wait_for(&self, sequence: int, ep: &Vec<&Padded64>) -> int;
+	fn new(ring_size: uint) -> Self;
+	fn get_ring_size(&self) -> uint;
+	fn wait_for(&self, sequence: int, ep: &Vec<&Padded64>) -> uint;
 
-	fn lowest_dep(&self, deps: &Vec<&Padded64>) -> int {
-		let mut lowest = -1;
-		for cursor in deps.iter() {
-			lowest = min(lowest, cursor.load());
+	fn until(&self, sequence: int, deps: &Vec<&Padded64>) -> int {
+		let mut next: Option<int> = None;
+
+		//error!("deps: {}", deps);
+		for v in deps.iter() {
+			let pos: int = v.load();
+
+			//error!("Dep: {}, Sequence: {}", pos, sequence);
+			if pos != -1 {
+				let adjusted = match pos < sequence {
+					true => pos + self.get_ring_size() as int,
+					false => pos
+				};
+
+				next = match next {
+					None => Some(adjusted),
+					Some(p) => {
+						Some(min(p, adjusted))
+					}
+				}
+			}
 		}
-		lowest
+
+		let final = match next {
+			None => -1,
+			Some(p) => p
+		};
+
+		//error!("WaitStrategy::until:  {}", final);
+		final
 	}
+
 }
 
-pub struct BusyWait;
+pub struct BusyWait {
+	ring_size: uint,
+  ring_mask: uint
+}
 
 impl WaitStrategy for BusyWait {
-	fn new() -> BusyWait {
-		BusyWait
+	fn new(ring_size: uint) -> BusyWait {
+		BusyWait {
+			ring_size: ring_size,
+			ring_mask: ring_size -1
+		}
 	}
 
-	fn wait_for(&self, sequence: int, deps: &Vec<&Padded64>) -> int {
-		let mut avail: int  = self.lowest_dep(deps);
-		while avail < sequence {
-			avail = self.lowest_dep(deps);
+	fn get_ring_size(&self) -> uint {
+		self.ring_size
+	}
+
+	fn wait_for(&self, sequence: int, deps: &Vec<&Padded64>) -> uint {
+		let mut avail = self.until(sequence, deps);
+
+		loop {
+			//error!("BusyWait::wait_for:  Sequence is at {}, highest available is:{}", sequence, avail);
+			if avail > sequence {
+				error!("BusyWait::wait_for >> Have data, break.")
+				break;
+			}
+			avail = self.until(sequence, deps);
 		}
-		avail
+
+		error!("BusyWait::wait_for::returning: {} - {}", avail, avail as uint & self.ring_mask);
+		(avail as uint)
 	}
 }

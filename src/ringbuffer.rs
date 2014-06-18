@@ -1,35 +1,57 @@
 
+use std::ty::Unsafe;
+use std::fmt;
+use TestSlot;
+
 macro_rules! is_pow2(
     ($x:ident) => (
       (($x != 0) && ($x & ($x - 1)) == 0)
     );
 )
 
-pub trait Slot {
+pub trait Slot: Send {
 	fn new() -> Self;
 }
 
 pub struct RingBuffer<T> {
-	entries: Vec<T>,
+	entries: Unsafe<Vec<T>>,
 	mask: uint
 }
 
-impl<T: Slot> RingBuffer<T> {
+impl<T: Slot + Send + fmt::Show> RingBuffer<T> {
 
 	pub fn new(size: uint) -> RingBuffer<T> {
-
-    let entries: Vec<T> = match size {
+    let entries: Unsafe<Vec<T>> = match size {
 			0 => fail!("Buffer Size must be greater than zero."),
 			s if !(is_pow2!(s)) => fail!("Buffer Size must be a power of two"),
-			_ => Vec::from_fn(size, |_| Slot::new())
+			_ => unsafe { Unsafe::new(Vec::from_fn(size, |_| Slot::new())) }
 		};
 
 		RingBuffer::<T> {
 			entries: entries,
 			mask: size - 1
 		}
-
 	}
+
+  pub fn get_capacity(&self) -> uint {
+    let v: *mut Vec<T> = unsafe { self.entries.get() };
+    unsafe { (*v).len() }
+  }
+
+  // Unsafe because we have no guarantees the caller won't invalidate this slot
+  pub unsafe fn get(&self, from: uint, size: uint) -> &[T] {
+    error!("RingBuffer::get({}, {})", from, size);
+    let v: *mut Vec<T> = unsafe { self.entries.get() };
+    unsafe { println!("Ring: {}", (*v)); }
+    unsafe { (*v).slice(from, size) }
+  }
+
+  // Unsafe because we have no guarantees the caller won't invalidate this slot
+  pub unsafe fn write(&self, position: uint, data: T) {
+    let v: *mut Vec<T> = unsafe { self.entries.get() };
+    let slot = unsafe { (*v).get_mut(position) };
+    *slot = data;
+  }
 }
 
 
@@ -39,6 +61,7 @@ mod tests {
 
 	use super::{RingBuffer, Slot};
 
+  #[deriving(Show)]
   struct TestSlot;
 
   impl Slot for TestSlot {
