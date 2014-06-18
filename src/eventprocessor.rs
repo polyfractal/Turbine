@@ -39,22 +39,24 @@ impl<T: Slot + Show> EventProcessor<T> {
 			deps.push((*self.cursors).get(*ep));
 		}
 		drop(dep_eps);
-		error!("					Token: {}", self.token);
+		//error!("					Token: {}", self.token);
 		let cursor = (*self.cursors).get(self.token + 1);
 
 		let mask: uint  = capacity - 1;
 		let mut rollover = (false, 0);
 
+		let mut internal_cursor = cursor.load();
+
 		loop {
-			let c = cursor.load();
-			error!("              Current: {}, waiting on: {}", c, c);
+			let c = internal_cursor;	//cursor.load();
+			//error!("              Current: {}, waiting on: {}", c, c);
 
 			let mut available: uint = wait_strategy.wait_for(c, &deps);
 
 			let from = c as uint & mask;
 			let mut to = available & mask;
 
-			error!("              from: {}, to: {}", from, to);
+			//error!("              from: {}, to: {}", from, to);
 			if to < from {
 				rollover = (true, to);
 				to = capacity;
@@ -70,7 +72,7 @@ impl<T: Slot + Show> EventProcessor<T> {
 			};
 
 			if rollover.val0() == true {
-				error!("              ROLLOVER!");
+				//error!("              ROLLOVER!");
 				let status = unsafe {
 					let data: &[T] = self.ring.get(0, rollover.val1());
 					f(data)
@@ -78,7 +80,8 @@ impl<T: Slot + Show> EventProcessor<T> {
 			}
 
 			let adjusted_pos = self.increment(available as int, capacity as int);
-			error!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
+			//error!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
+			internal_cursor = adjusted_pos;
 			cursor.store(adjusted_pos);
 
 			//timer::sleep(1000);
@@ -88,7 +91,7 @@ impl<T: Slot + Show> EventProcessor<T> {
 			};
 
 		}
-		error!("BusyWait::end");
+		//error!("BusyWait::end");
 	}
 
 	fn increment(&self, p: int, size: int) -> int {

@@ -34,7 +34,7 @@ SOURCE_FILES = $(shell test -e src/ && find src -type f)
 COMPILER = rustc
 
 # For release:
-  COMPILER_FLAGS = -O
+  COMPILER_FLAGS = --opt-level=2
 # For debugging:
 # COMPILER_FLAGS = -g
 

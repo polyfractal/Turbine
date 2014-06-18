@@ -13,6 +13,8 @@
 extern crate log;
 extern crate sync;
 
+extern crate time;
+
 use sync::Arc;
 use eventprocessor::EventProcessor;
 use paddedatomics::Padded64;
@@ -62,7 +64,7 @@ struct Turbine<T> {
 }
 
 impl<T: Slot + Send + fmt::Show> Turbine<T> {
-	pub fn new() -> Turbine<T> {
+	pub fn new(ring_size: uint) -> Turbine<T> {
 		let mut epb = Vec::with_capacity(8);
 
 		Turbine::<T> {
@@ -70,11 +72,11 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 			epb: epb,
 			graph: Arc::new(vec![]),
 			cursors: Arc::new(vec![]),
-			ring: Arc::new(RingBuffer::<T>::new(1024)),
+			ring: Arc::new(RingBuffer::<T>::new(ring_size)),
 			start: 0,
 			end: 0,
-			size: 1024,
-			mask: 1023
+			size: ring_size as int,
+			mask: (ring_size - 1) as int
 		}
 	}
 
@@ -151,13 +153,15 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 		}
 
 		let write_pos = self.end & (self.mask);
-		error!("end is {}, writing {} to {}", self.end, data, write_pos);
+		//error!("end is {}, writing {} to {}", self.end, data, write_pos);
 		unsafe {
 			self.ring.write(write_pos as uint, data);
 		}
 
+
+
 		let adjusted_pos = self.increment(self.end);
-		error!("adjusted_pos is {}", adjusted_pos);
+		//error!("adjusted_pos is {}", adjusted_pos);
 		self.end = adjusted_pos;
 		self.cursors.get(0).store(adjusted_pos);
 
@@ -166,8 +170,10 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 	fn can_write(&self) -> bool {
 		//return cb->end == (cb->start ^ cb->size);
 		for v in self.cursors.iter().skip(1) {
-			if (self.end == (v.load() ^ self.size)) {
-				return false;
+			let cursor_pos = v.load();
+			if (self.end == (cursor_pos ^ self.size)) {
+				//error!("Buffer full!");
+				return false;		// full ring buffer, same position but flipped parity bits
 			}
 		}
 		true
@@ -194,23 +200,24 @@ mod test {
 	use std::fmt;
 	use std::task::{TaskBuilder};
 	use sync::Future;
+	use time::precise_time_ns;
 
 	use TestSlot;
 
 	#[test]
 	fn test_init() {
-		let t: Turbine<TestSlot> = Turbine::new();
+		let t: Turbine<TestSlot> = Turbine::new(1024);
 	}
 
 	#[test]
 	fn test_create_epb() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new();
 	}
 
 	#[test]
 	fn test_depends() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 		let e2 = t.ep_new().unwrap();
 
@@ -219,7 +226,7 @@ mod test {
 
 	#[test]
 	fn test_many_depends() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 		let e2 = t.ep_new().unwrap();
 		let e3 = t.ep_new().unwrap();
@@ -252,7 +259,7 @@ mod test {
 
 	#[test]
 	fn test_finalize() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new();
 		assert!(e1.is_ok() == true);
 
@@ -264,7 +271,7 @@ mod test {
 
 	#[test]
 	fn test_double_finalize() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new();
 		assert!(e1.is_ok() == true);
 
@@ -277,7 +284,7 @@ mod test {
 
 	#[test]
 	fn test_send_task() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new();
 		assert!(e1.is_ok() == true);
 
@@ -300,7 +307,7 @@ mod test {
 
 	#[test]
 	fn test_write_one() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
@@ -314,7 +321,7 @@ mod test {
 
 	#[test]
 	fn test_write_1024() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
@@ -333,7 +340,7 @@ mod test {
 
 	#[test]
 	fn test_write_ring_rollover() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
@@ -354,7 +361,7 @@ mod test {
 
 	#[test]
 	fn test_write_ring_double_rollover() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
@@ -381,7 +388,7 @@ mod test {
 
 	#[test]
 	fn test_write_one_read_one() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
@@ -389,10 +396,10 @@ mod test {
 
 		let mut future = Future::spawn(proc() {
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-				error!("data[0].value: {}", data[0].value);
+				//error!("data[0].value: {}", data[0].value);
 				assert!(data.len() == 1);
 				assert!(data[0].value == 19);
-				error!("EP:: Done");
+				//error!("EP:: Done");
 				return Err(());
 			});
 			tx.send(1);
@@ -407,13 +414,13 @@ mod test {
 		assert!(t.end == 1);
 		rx.recv_opt();
 		future.get();
-		error!("Test::end");
+		//error!("Test::end");
 	}
 
 
 	#[test]
 	fn test_write_read_many() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
@@ -427,11 +434,11 @@ mod test {
 				//error!("EP::data.len: {}", data.len());
 
 				for x in data.iter() {
-					error!("EP:: last: {}, value: {}", last, x.value);
+				//	error!("EP:: last: {}, value: {}", last, x.value);
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
-					error!("EP::counter: {}", counter);
+					//error!("EP::counter: {}", counter);
 				}
 
 				if counter == 1000 {
@@ -455,15 +462,15 @@ mod test {
 		//timer::sleep(10000);
 		rx.recv_opt();
 		future.get();
-		error!("Test::end");
+		//error!("Test::end");
 
 		//
 	}
 
-/*
+
 	#[test]
 	fn test_write_read_many_rollover() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
@@ -474,11 +481,11 @@ mod test {
 			let mut last = -1;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 				for x in data.iter() {
-					error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					//error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
-					error!("EP::counter: {}", counter);
+					//error!("EP::counter: {}", counter);
 				}
 
 				if counter == 1200 {
@@ -496,11 +503,11 @@ mod test {
 		for i in range(0, 1200) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
-			error!("______Writing {}", i);
+			//error!("______Writing {}", i);
 			t.write(x);
 
 		}
-		error!("Test::end");
+		//error!("Test::end");
 		rx.recv_opt();
 		future.get();
 
@@ -510,28 +517,26 @@ mod test {
 
 	#[test]
 	fn test_write_read_large() {
-		let mut t: Turbine<TestSlot> = Turbine::new();
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
 		let (tx, rx) = channel();
 
-		assert!(t.cursors.len() == 2);
 
 		let mut future = Future::spawn(proc() {
 			let mut counter = 0;
 			let mut last = -1;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 
-				error!("EP::data.len: {}", data.len());
+				//error!("EP::data.len: {}", data.len());
 
 				for x in data.iter() {
-					error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					//error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
-					error!("EP::counter: {}", counter);
-					//timer::sleep(500);
+					//error!("EP::counter: {}", counter);
 				}
 
 				if counter == 50000 {
@@ -544,23 +549,60 @@ mod test {
 			tx.send(1);
 		});
 
-		assert!(t.get_pos() == 0);
-		assert!(t.current == 0);
+		assert!(t.end == 0);
 
 		for i in range(0, 50002) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
-			error!("Writing {}", i);
+			//error!("Writing {}", i);
 			t.write(x);
-			timer::sleep(10);
 
 		}
-		timer::sleep(50000);
-		error!("Test::end");
+		//error!("Test::end");
 		rx.recv_opt();
 		future.get();
 
 		//
 	}
-*/
+
+	#[test]
+	fn bench_1bn() {
+		let mut t: Turbine<TestSlot> = Turbine::new(1048576);
+		let e1 = t.ep_new().unwrap();
+
+		let event_processor = t.ep_finalize(e1);
+		let (tx, rx) = channel();
+
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0;
+			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				for x in data.iter() {
+					counter += 1;
+				}
+
+				if counter == 1000000000 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx.send(1);
+		});
+
+		let start = precise_time_ns();
+		for i in range(0, 1000000000) {
+			t.write(Slot::new());
+		}
+
+		rx.recv_opt();
+		future.get();
+		let end = precise_time_ns();
+
+		error!("Total time: {}", (end-start) as f32 / 1000000f32);
+		error!("ops/s: {}", 1000000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
+		//
+	}
+
 }

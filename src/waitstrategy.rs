@@ -68,7 +68,7 @@ impl WaitStrategy for BusyWait {
 				false => {}
 			}
 		}
-		error!("					Wait done, returning {}", sequence);
+		//error!("					Wait done, returning {}", sequence);
 		sequence as uint
 	}
 
@@ -80,10 +80,10 @@ impl WaitStrategy for BusyWait {
 				return false;	// empty ringbuffer, pointers at same location
 			}
 
-			error!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
-			if sequence == (cursor ^ self.ring_size as int) {
-				return false;	// full ring buffer, same position but flipped parity bits
-			}
+			//error!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
+			//if sequence == (cursor ^ self.ring_size as int) {
+			//	return false;	// full ring buffer, same position but flipped parity bits
+			//}
 		}
 		true
 	}

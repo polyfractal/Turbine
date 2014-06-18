@@ -22,12 +22,12 @@ impl Padded64 {
 	}
 	#[inline]
 	pub fn add(&self, x: int) -> int {
-		self.counter.fetch_add(x, Release)
+		self.counter.fetch_add(x, SeqCst)
 	}
 
 	#[inline]
 	pub fn load(&self) -> int {
-		self.counter.load(Acquire)
+		self.counter.load(SeqCst)
 	}
 
 	#[inline]
@@ -42,18 +42,18 @@ impl Padded64 {
 
 	#[inline]
 	pub fn or(&self, x: int) -> int {
-		self.counter.fetch_or(x, Release)
+		self.counter.fetch_or(x, SeqCst)
 	}
 
 	#[inline]
 	pub fn and(&self, x: int) -> int {
-		self.counter.fetch_and(x, Release)
+		self.counter.fetch_and(x, SeqCst)
 	}
 }
 
 impl Show for Padded64 {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f.buf, "{}", self.counter.load(Acquire))
+        write!(f.buf, "{}", self.counter.load(SeqCst))
 				//write!(f.buf, "{}", 0)
     }
 }
