@@ -55,8 +55,9 @@ struct Turbine<T> {
 	graph: Arc<Vec<Vec<uint>>>,
 	cursors: Arc<Vec<Padded64>>,
 	ring: Arc<RingBuffer<T>>,
-	until: int,
-	current: int,
+	start: int,
+	end: int,
+	size: int,
 	mask: int
 }
 
@@ -70,8 +71,9 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 			graph: Arc::new(vec![]),
 			cursors: Arc::new(vec![]),
 			ring: Arc::new(RingBuffer::<T>::new(1024)),
-			until: 1023,
-			current: 0,
+			start: 0,
+			end: 0,
+			size: 1024,
 			mask: 1023
 		}
 	}
@@ -122,7 +124,7 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 				None => vec![0]
 			};
 			eps.push(deps);
-			cursors.push(Padded64::new(-1));
+			cursors.push(Padded64::new(0));
 		}
 
 		self.graph = Arc::new(eps);
@@ -133,66 +135,48 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 
 	pub fn write(&mut self, data: T) {
 
+		/*
+		cb->elems[cb->end&(cb->size-1)] = *elem;
+    if (cbIsFull(cb)) /* full, overwrite moves start pointer */
+        cb->start = cbIncr(cb, cb->start);
+    cb->end = cbIncr(cb, cb->end);
+		*/
+
+		// Busy spin
 		loop {
-			let next = self.current & self.mask;
-			error!("Write next is: {}, until is: {}", next, self.until)
-			if next != self.until {
-				error!("Turbine::write to {}", next);
-				unsafe {
-					self.ring.write(next as uint, data);
-				}
-				self.current = next + 1;
-				self.cursors.get(0).store(next + 1);
-				error!("CURSOR becomes {}", self.current);
-				return;
-
-			} else {
-					error!("Write Spin...");
-					self.until = self.closest_counter_clockwise(self.current);
-
-					error!("Self.until now: {}", self.until);
+			match self.can_write() {
+				true => break,
+				false => {}
 			}
-
 		}
 
-	}
-	fn closest_counter_clockwise(&self, pos: int) -> int {
-		let first_pos = self.cursors.get(1).load();
-		error!("First_pos: {}", first_pos);
-		let mut max_pos = first_pos;
-		let mut min_pos = first_pos;
+		let write_pos = self.end & (self.mask);
+		error!("end is {}, writing {} to {}", self.end, data, write_pos);
+		unsafe {
+			self.ring.write(write_pos as uint, data);
+		}
 
-		error!("Self.cursors.len(): {}", self.cursors.len());
+		let adjusted_pos = self.increment(self.end);
+		error!("adjusted_pos is {}", adjusted_pos);
+		self.end = adjusted_pos;
+		self.cursors.get(0).store(adjusted_pos);
+
+	}
+
+	fn can_write(&self) -> bool {
+		//return cb->end == (cb->start ^ cb->size);
 		for v in self.cursors.iter().skip(1) {
-			let pos = v.load();
-			error!("next pos: {}", pos);
-			min_pos = min(min_pos, pos);
-			max_pos = max(max_pos, pos);
+			if (self.end == (v.load() ^ self.size)) {
+				return false;
+			}
 		}
-
-		error!("pos: {}, max_pos: {}, min_pos: {}", pos, max_pos, min_pos);
-		if (max_pos > pos) {
-			max_pos
-		} else {
-			min_pos
-		}
+		true
 	}
 
-/*
-	fn survey_cursors(&self) -> (int, int) {
-		let first_pos = self.cursors.get(1).load();
-		let mut max_pos = first_pos;
-		let mut min_pos = first_pos;
-		for v in self.cursors.iter().skip(2) {
-			let pos = v.load();
-			min_pos = min(min_pos, pos);
-			max_pos = max(max_pos, pos);
-		}
-		error!("Write Survey: {}, {}", min_pos, max_pos);
-		(min_pos, max_pos)
-	}
-*/
 
+	fn increment(&self, p: int) -> int {
+		(p + 1) & ((2 * self.size) - 1)
+	}
 
 
 
@@ -321,11 +305,10 @@ mod test {
 
 		let event_processor = t.ep_finalize(e1);
 
-		assert!(t.current == 0);
-
+		assert!(t.end == 0);
 		t.write(Slot::new());
 
-		assert!(t.current == 1);
+		assert!(t.end == 1);
 	}
 
 
@@ -336,13 +319,13 @@ mod test {
 
 		let event_processor = t.ep_finalize(e1);
 
-		assert!(t.current == 0);
+		assert!(t.end == 0);
 
 		// fill the buffer but don't roll over
 		for i in range(1, 1023) {
 			t.write(Slot::new());
 
-			assert!(t.current == i);
+			assert!(t.end == i);
 		}
 
 	}
@@ -355,21 +338,44 @@ mod test {
 
 		let event_processor = t.ep_finalize(e1);
 
-		assert!(t.current == 0);
+		assert!(t.end == 0);
 
-		assert!(t.cursors.len() == 2);
 		//move our reader's cursor so we can rollover
 		t.cursors.get(1).store(1);
 
 		for i in range(1, 1025) {
 			t.write(Slot::new());
 
-			assert!(t.current == i);
+			assert!(t.end == i);
+		}
+		t.write(Slot::new());
+		assert!(t.end == 1025);
+	}
+
+	#[test]
+	fn test_write_ring_double_rollover() {
+		let mut t: Turbine<TestSlot> = Turbine::new();
+		let e1 = t.ep_new().unwrap();
+
+		let event_processor = t.ep_finalize(e1);
+
+		assert!(t.end == 0);
+
+		//move our reader's cursor so we can rollover
+		t.cursors.get(1).store(1);
+
+		for i in range(1, 1025) {
+			t.write(Slot::new());
+
+			assert!(t.end == i);
 		}
 
-		t.write(Slot::new());
-
-		assert!(t.current == 1);
+		//move our reader's cursor so we can rollover again
+		t.cursors.get(1).store(1025);
+		for i in range(1, 1025) {
+			t.write(Slot::new());
+		}
+		assert!(t.end == 0);
 	}
 
 
@@ -383,6 +389,7 @@ mod test {
 
 		let mut future = Future::spawn(proc() {
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				error!("data[0].value: {}", data[0].value);
 				assert!(data.len() == 1);
 				assert!(data[0].value == 19);
 				error!("EP:: Done");
@@ -391,13 +398,13 @@ mod test {
 			tx.send(1);
 		});
 
-		assert!(t.current == 0);
+		assert!(t.end == 0);
 
 		let mut x: TestSlot = Slot::new();
 		x.value = 19;
 		t.write(x);
 
-		assert!(t.current == 1);
+		assert!(t.end == 1);
 		rx.recv_opt();
 		future.get();
 		error!("Test::end");
@@ -437,7 +444,7 @@ mod test {
 			tx.send(1);
 		});
 
-		assert!(t.current == 0);
+		assert!(t.end == 0);
 
 		for i in range(0, 1000) {
 			let mut x: TestSlot = Slot::new();
@@ -452,6 +459,7 @@ mod test {
 
 		//
 	}
+
 /*
 	#[test]
 	fn test_write_read_many_rollover() {
@@ -465,9 +473,6 @@ mod test {
 			let mut counter = 0;
 			let mut last = -1;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-
-				error!("EP::data.len: {}", data.len());
-
 				for x in data.iter() {
 					error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
 					assert!(last + 1 == x.value);
@@ -476,7 +481,7 @@ mod test {
 					error!("EP::counter: {}", counter);
 				}
 
-				if counter == 1024 {
+				if counter == 1200 {
 						return Err(());
 				} else {
 					return Ok(());
@@ -486,13 +491,12 @@ mod test {
 			tx.send(1);
 		});
 
-		assert!(t.get_pos() == 0);
-		assert!(t.current == 0);
+		assert!(t.end == 0);
 
-		for i in range(0, 1025) {
+		for i in range(0, 1200) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
-			error!("Writing {}", i);
+			error!("______Writing {}", i);
 			t.write(x);
 
 		}
@@ -502,6 +506,7 @@ mod test {
 
 		//timer::sleep(10000);
 	}
+
 
 	#[test]
 	fn test_write_read_large() {

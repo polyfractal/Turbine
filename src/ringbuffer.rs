@@ -40,9 +40,9 @@ impl<T: Slot + Send + fmt::Show> RingBuffer<T> {
 
   // Unsafe because we have no guarantees the caller won't invalidate this slot
   pub unsafe fn get(&self, from: uint, size: uint) -> &[T] {
-    error!("RingBuffer::get({}, {})", from, size);
+    error!("              RingBuffer get({}, {})", from, size);
     let v: *mut Vec<T> = unsafe { self.entries.get() };
-    unsafe { println!("Ring: {}", (*v)); }
+    //unsafe { println!("Ring: {}", (*v)); }
     unsafe { (*v).slice(from, size) }
   }
 

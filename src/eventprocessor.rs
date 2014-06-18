@@ -39,54 +39,47 @@ impl<T: Slot + Show> EventProcessor<T> {
 			deps.push((*self.cursors).get(*ep));
 		}
 		drop(dep_eps);
-
-		let cursor = (*self.cursors).get(self.token);
+		error!("					Token: {}", self.token);
+		let cursor = (*self.cursors).get(self.token + 1);
 
 		let mask: uint  = capacity - 1;
-
 		let mut rollover = (false, 0);
 
 		loop {
 			let c = cursor.load();
-			error!("BusyWait:: Current: {}", c);
-			let current = match c {
-				-1 => 0,
-				v @ _ => (v as uint & mask) as int
-			};
+			error!("              Current: {}, waiting on: {}", c, c);
 
-			let mut available: uint = wait_strategy.wait_for(current, &deps);
+			let mut available: uint = wait_strategy.wait_for(c, &deps);
 
-			if available >= capacity {
-				rollover = (true, available - capacity);
-				available = capacity;
+			let from = c as uint & mask;
+			let mut to = available & mask;
+
+			error!("              from: {}, to: {}", from, to);
+			if to < from {
+				rollover = (true, to);
+				to = capacity;
 			}
-			//let to = (available - next);
-
-			error!("BusyWait::  current: {}, available: {}", current, available);
 
 			// This is safe because the Producer task cannot invalidate these slots
 			// before we increment our cursor.  Since the slice is borrowed out, we
 			// know it will be returned after the function call ends.  The slice will
 			// be dropped after the unsafe block, and *then* we increment our cursor
 			let status = unsafe {
-				let data: &[T] = self.ring.get(current as uint, available);
+				let data: &[T] = self.ring.get(from, to + 1);
 				f(data)
 			};
 
 			if rollover.val0() == true {
-				error!("!!!!  ROLLOVER");
+				error!("              ROLLOVER!");
 				let status = unsafe {
 					let data: &[T] = self.ring.get(0, rollover.val1());
 					f(data)
 				};
-
-				rollover = (false, 0);
 			}
 
-			// Advance our location
-			//available += 1;
-			error!("BusyWait:: advancing to: {}", available);
-			cursor.store(available as int);
+			let adjusted_pos = self.increment(available as int, capacity as int);
+			error!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
+			cursor.store(adjusted_pos);
 
 			//timer::sleep(1000);
 			match status {
@@ -96,6 +89,10 @@ impl<T: Slot + Show> EventProcessor<T> {
 
 		}
 		error!("BusyWait::end");
+	}
+
+	fn increment(&self, p: int, size: int) -> int {
+		(p + 1) & ((2 * size) - 1)
 	}
 
 }
