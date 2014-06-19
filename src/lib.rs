@@ -23,6 +23,7 @@ use std::cmp::{min, max};
 use std::fmt;
 
 pub use ringbuffer::Slot;
+pub use waitstrategy::{WaitStrategy, BusyWait};
 
 mod eventprocessor;
 mod waitstrategy;
@@ -30,28 +31,7 @@ mod paddedatomics;
 mod ringbuffer;
 
 
-
-
-
-struct TestSlot {
-	pub value: int
-}
-
-impl Slot for TestSlot {
-	fn new() -> TestSlot {
-		TestSlot {
-			value: -1	// Negative value here helps catch bugs since counts will be wrong
-		}
-	}
-}
-impl fmt::Show for TestSlot {
-		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-				write!(f.buf, "{}", self.value)
-		}
-}
-
-
-struct Turbine<T> {
+pub struct Turbine<T> {
 	finalized: bool,
 	epb: Vec<Option<Vec<uint>>>,
 	graph: Arc<Vec<Vec<uint>>>,
@@ -202,7 +182,25 @@ mod test {
 	use sync::Future;
 	use time::precise_time_ns;
 
-	use TestSlot;
+	//use TestSlot;
+
+	struct TestSlot {
+		pub value: int
+	}
+
+	impl Slot for TestSlot {
+		fn new() -> TestSlot {
+			TestSlot {
+				value: -1	// Negative value here helps catch bugs since counts will be wrong
+			}
+		}
+	}
+	impl fmt::Show for TestSlot {
+			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+					write!(f.buf, "{}", self.value)
+			}
+	}
+
 
 	#[test]
 	fn test_init() {
@@ -562,46 +560,6 @@ mod test {
 		rx.recv_opt();
 		future.get();
 
-		//
-	}
-
-	#[test]
-	fn bench_1bn() {
-		let mut t: Turbine<TestSlot> = Turbine::new(1048576);
-		let e1 = t.ep_new().unwrap();
-
-		let event_processor = t.ep_finalize(e1);
-		let (tx, rx) = channel();
-
-
-		let mut future = Future::spawn(proc() {
-			let mut counter = 0;
-			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-				for x in data.iter() {
-					counter += 1;
-				}
-
-				if counter == 1000000000 {
-						return Err(());
-				} else {
-					return Ok(());
-				}
-
-			});
-			tx.send(1);
-		});
-
-		let start = precise_time_ns();
-		for i in range(0, 1000000000) {
-			t.write(Slot::new());
-		}
-
-		rx.recv_opt();
-		future.get();
-		let end = precise_time_ns();
-
-		error!("Total time: {}", (end-start) as f32 / 1000000f32);
-		error!("ops/s: {}", 1000000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
 		//
 	}
 

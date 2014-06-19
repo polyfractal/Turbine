@@ -1,7 +1,6 @@
 
 use std::ty::Unsafe;
 use std::fmt;
-use TestSlot;
 
 macro_rules! is_pow2(
     ($x:ident) => (
