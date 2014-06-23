@@ -98,9 +98,14 @@ mod test {
 			let mut s: TestSlot = Slot::new();
 			s.value = 1;
 			t.write(s);
+
+			match rx.try_recv() {
+				Ok(v) => break,
+				_ => {}
+			}
 		}
 
-		rx.recv_opt();
+		//rx.recv_opt();
 		future.get();
 		let end = precise_time_ns();
 

@@ -8,7 +8,7 @@ pub trait WaitStrategy {
 	fn new(ring_size: uint) -> Self;
 	fn get_ring_size(&self) -> uint;
 	fn wait_for(&self, sequence: int, ep: &Vec<&Padded64>) -> uint;
-	fn can_read(&self, sequence: int, deps: &Vec<&Padded64>) -> bool;
+	fn can_read(&self, sequence: int, deps: &Vec<&Padded64>) -> Option<int>;
 
 	fn until(&self, sequence: int, deps: &Vec<&Padded64>) -> int {
 		let mut next: Option<int> = None;
@@ -62,29 +62,39 @@ impl WaitStrategy for BusyWait {
 	}
 
 	fn wait_for(&self, sequence: int, deps: &Vec<&Padded64>) -> uint {
+		let mut available = 0;
 		loop {
 			match self.can_read(sequence, deps) {
-				true => break,
-				false => {}
+				Some(v) => {
+					available = v;
+					break
+				},
+				None => {}
 			}
 		}
-		//error!("					Wait done, returning {}", sequence);
-		sequence as uint
+		//error!("					Wait done, returning {}", available);
+		available as uint
 	}
 
-	fn can_read(&self, sequence: int, deps: &Vec<&Padded64>) -> bool {
+	fn can_read(&self, sequence: int, deps: &Vec<&Padded64>) -> Option<int> {
 		//return cb->end == (cb->start ^ cb->size);
+		let mut min_cursor = (self.ring_size * 2) as int + 1;
+
 		for v in deps.iter() {
 			let cursor = v.load();
-			if sequence == cursor {
-				return false;	// empty ringbuffer, pointers at same location
-			}
-
 			//error!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
+
+			if sequence == cursor {
+				return None;	// at same position as a dependency. we can't move
+			}
+			min_cursor = min(min_cursor, cursor);
+			//error!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
+			//error!("					min_cursor: {}", min_cursor);
+
 			//if sequence == (cursor ^ self.ring_size as int) {
 			//	return false;	// full ring buffer, same position but flipped parity bits
 			//}
 		}
-		true
+		Some(min_cursor)
 	}
 }

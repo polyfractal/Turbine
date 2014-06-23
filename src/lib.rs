@@ -126,6 +126,7 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 
 		// Busy spin
 		loop {
+			//error!("Spin...");
 			match self.can_write() {
 				true => break,
 				false => {}
@@ -144,6 +145,7 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 		//error!("adjusted_pos is {}", adjusted_pos);
 		self.end = adjusted_pos;
 		self.cursors.get(0).store(adjusted_pos);
+		//error!("Write complete.")
 
 	}
 
@@ -181,6 +183,7 @@ mod test {
 	use std::task::{TaskBuilder};
 	use sync::Future;
 	use time::precise_time_ns;
+	use std::comm::TryRecvError;
 
 	//use TestSlot;
 
@@ -534,7 +537,7 @@ mod test {
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
-					//error!("EP::counter: {}", counter);
+					//error!("counter: {}", counter);
 				}
 
 				if counter == 50000 {
@@ -549,18 +552,93 @@ mod test {
 
 		assert!(t.end == 0);
 
-		for i in range(0, 50002) {
+		for i in range(0, 50000) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
 			//error!("Writing {}", i);
 			t.write(x);
 
+			match rx.try_recv() {
+				Ok(v) => break,
+				_ => {}
+			}
+
 		}
-		//error!("Test::end");
-		rx.recv_opt();
+		//error!("Exit write loop");
+		//rx.recv_opt();
 		future.get();
 
 		//
+	}
+
+	#[test]
+	fn bench_turbine_10m() {
+		let mut t: Turbine<TestSlot> = Turbine::new(1048576);
+		let e1 = t.ep_new().unwrap();
+
+		let event_processor = t.ep_finalize(e1);
+		let (tx, rx) = channel();
+
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0;
+			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				for _ in data.iter() {
+					counter += data[0].value;
+				}
+
+				if counter == 10000000 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx.send(1);
+		});
+
+		let start = precise_time_ns();
+		for i in range(0, 10000000) {
+			let mut s: TestSlot = Slot::new();
+			s.value = 1;
+			t.write(s);
+
+
+		}
+
+		//rx.recv_opt();
+		future.get();
+		let end = precise_time_ns();
+
+		error!("Total time: {}", (end-start) as f32 / 1000000f32);
+		error!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
+		//
+	}
+
+	#[test]
+	fn bench_chan_10m() {
+
+		let (tx_bench, rx_bench) = channel();
+
+
+		let mut future = Future::spawn(proc() {
+			for _ in range(0, 10000000)  {
+				tx_bench.send(1);
+			}
+
+		});
+
+		let start = precise_time_ns();
+		let mut counter = 0;
+		for i in range(0, 10000000) {
+			counter += rx_bench.recv();
+		}
+		let end = precise_time_ns();
+
+		future.get();
+
+		error!("Total time: {}", (end-start) as f32 / 1000000f32);
+		error!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
 	}
 
 }

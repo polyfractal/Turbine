@@ -51,16 +51,25 @@ impl<T: Slot + Show> EventProcessor<T> {
 			let c = internal_cursor;	//cursor.load();
 			//error!("              Current: {}, waiting on: {}", c, c);
 
-			let mut available: uint = wait_strategy.wait_for(c, &deps);
+			let mut available: uint = wait_strategy.wait_for(c, &deps) - 1;
+			//error!("							Available: {}", available);
 
 			let from = c as uint & mask;
 			let mut to = available & mask;
 
-			//error!("              from: {}, to: {}", from, to);
-			if to < from {
-				rollover = (true, to);
-				to = capacity;
+
+			//error!("              from: {}, to: {} -- {}", from, to, (to < from));
+			if (to < from){
+				rollover = match from == to {
+					true => (false, 0),	// If the rollover lands exactly on the ring size, no need fetch second half
+					false =>(true, to)
+				};
+				//error!("							{}", rollover);
+				to = capacity - 1;
+				//error!("              ROLLOVER B!  to is now: {}", to);
+
 			}
+
 
 			// This is safe because the Producer task cannot invalidate these slots
 			// before we increment our cursor.  Since the slice is borrowed out, we
@@ -71,12 +80,14 @@ impl<T: Slot + Show> EventProcessor<T> {
 				f(data)
 			};
 
-			if rollover.val0() == true {
-				//error!("              ROLLOVER!");
+			if rollover.val0() == true  {
+				//error!("              ROLLOVER C!");
+				//error!("							{}", rollover);
 				let status = unsafe {
-					let data: &[T] = self.ring.get(0, rollover.val1());
+					let data: &[T] = self.ring.get(0, rollover.val1() + 1);
 					f(data)
 				};
+				rollover = (false, 0);
 			}
 
 			let adjusted_pos = self.increment(available as int, capacity as int);
