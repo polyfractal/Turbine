@@ -17,7 +17,7 @@ pub struct RingBuffer<T> {
 	mask: uint
 }
 
-impl<T: Slot + Send + fmt::Show> RingBuffer<T> {
+impl<T: Slot + Send> RingBuffer<T> {
 
 	pub fn new(size: uint) -> RingBuffer<T> {
     let entries: Unsafe<Vec<T>> = match size {
@@ -53,7 +53,7 @@ impl<T: Slot + Send + fmt::Show> RingBuffer<T> {
   }
 }
 
-
+/*
 
 #[cfg(test)]
 mod tests {
@@ -87,3 +87,5 @@ mod tests {
     let r: RingBuffer<TestSlot> = RingBuffer::new(0);
   }
 }
+
+*/

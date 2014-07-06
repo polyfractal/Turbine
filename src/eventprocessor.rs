@@ -17,7 +17,7 @@ pub struct EventProcessor<T> {
 }
 
 
-impl<T: Slot + Show> EventProcessor<T> {
+impl<T: Slot> EventProcessor<T> {
 	pub fn new(ring: Arc<RingBuffer<T>>, graph: Arc<Vec<Vec<uint>>>, cursors: Arc<Vec<Padded64>>, token: uint) -> EventProcessor<T> {
 		EventProcessor::<T> {
 			graph: graph,
@@ -49,24 +49,24 @@ impl<T: Slot + Show> EventProcessor<T> {
 
 		loop {
 			let c = internal_cursor;	//cursor.load();
-			//error!("              Current: {}, waiting on: {}", c, c);
+			error!("              Current: {}, waiting on: {}", c, c);
 
 			let mut available: uint = wait_strategy.wait_for(c, &deps) - 1;
-			//error!("							Available: {}", available);
+			error!("							Available: {}", available);
 
 			let from = c as uint & mask;
 			let mut to = available & mask;
 
 
-			//error!("              from: {}, to: {} -- {}", from, to, (to < from));
+			error!("              from: {}, to: {} -- {}", from, to, (to < from));
 			if (to < from){
 				rollover = match from == to {
 					true => (false, 0),	// If the rollover lands exactly on the ring size, no need fetch second half
 					false =>(true, to)
 				};
-				//error!("							{}", rollover);
+				error!("							{}", rollover);
 				to = capacity - 1;
-				//error!("              ROLLOVER B!  to is now: {}", to);
+				error!("              ROLLOVER B!  to is now: {}", to);
 
 			}
 
@@ -81,8 +81,8 @@ impl<T: Slot + Show> EventProcessor<T> {
 			};
 
 			if rollover.val0() == true  {
-				//error!("              ROLLOVER C!");
-				//error!("							{}", rollover);
+				error!("              ROLLOVER C!");
+				error!("							{}", rollover);
 				let status = unsafe {
 					let data: &[T] = self.ring.get(0, rollover.val1() + 1);
 					f(data)
@@ -91,7 +91,7 @@ impl<T: Slot + Show> EventProcessor<T> {
 			}
 
 			let adjusted_pos = self.increment(available as int, capacity as int);
-			//error!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
+			error!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
 			internal_cursor = adjusted_pos;
 			cursor.store(adjusted_pos);
 
@@ -102,7 +102,7 @@ impl<T: Slot + Show> EventProcessor<T> {
 			};
 
 		}
-		//error!("BusyWait::end");
+		error!("BusyWait::end");
 	}
 
 	fn increment(&self, p: int, size: int) -> int {

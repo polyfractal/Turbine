@@ -50,10 +50,3 @@ impl Padded64 {
 		self.counter.fetch_and(x, SeqCst)
 	}
 }
-
-impl Show for Padded64 {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f.buf, "{}", self.counter.load(SeqCst))
-				//write!(f.buf, "{}", 0)
-    }
-}

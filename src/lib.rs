@@ -40,10 +40,11 @@ pub struct Turbine<T> {
 	start: int,
 	end: int,
 	size: int,
-	mask: int
+	mask: int,
+	until: int
 }
 
-impl<T: Slot + Send + fmt::Show> Turbine<T> {
+impl<T: Slot + Send> Turbine<T> {
 	pub fn new(ring_size: uint) -> Turbine<T> {
 		let mut epb = Vec::with_capacity(8);
 
@@ -56,7 +57,8 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 			start: 0,
 			end: 0,
 			size: ring_size as int,
-			mask: (ring_size - 1) as int
+			mask: (ring_size - 1) as int,
+			until: ring_size as int
 		}
 	}
 
@@ -117,16 +119,9 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 
 	pub fn write(&mut self, data: T) {
 
-		/*
-		cb->elems[cb->end&(cb->size-1)] = *elem;
-    if (cbIsFull(cb)) /* full, overwrite moves start pointer */
-        cb->start = cbIncr(cb, cb->start);
-    cb->end = cbIncr(cb, cb->end);
-		*/
-
 		// Busy spin
 		loop {
-			//error!("Spin...");
+			error!("Spin...");
 			match self.can_write() {
 				true => break,
 				false => {}
@@ -134,7 +129,7 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 		}
 
 		let write_pos = self.end & (self.mask);
-		//error!("end is {}, writing {} to {}", self.end, data, write_pos);
+		error!("end is {}, writing to {}", self.end, write_pos);
 		unsafe {
 			self.ring.write(write_pos as uint, data);
 		}
@@ -142,23 +137,38 @@ impl<T: Slot + Send + fmt::Show> Turbine<T> {
 
 
 		let adjusted_pos = self.increment(self.end);
-		//error!("adjusted_pos is {}", adjusted_pos);
+		error!("adjusted_pos is {}", adjusted_pos);
 		self.end = adjusted_pos;
 		self.cursors.get(0).store(adjusted_pos);
-		//error!("Write complete.")
+		error!("Write complete.")
 
 	}
 
-	fn can_write(&self) -> bool {
+	fn can_write(&mut self) -> bool {
 		//return cb->end == (cb->start ^ cb->size);
-		for v in self.cursors.iter().skip(1) {
-			let cursor_pos = v.load();
-			if (self.end == (cursor_pos ^ self.size)) {
-				//error!("Buffer full!");
-				return false;		// full ring buffer, same position but flipped parity bits
+		let mut writeable = false;
+
+		error!("Until is: {}", self.until);
+		if self.until == self.end {
+			error!("*");
+			let mut closest = (self.size * 2) + 1;
+
+			for v in self.cursors.iter().skip(1) {
+				let cursor_pos = v.load();
+				if (self.end == (cursor_pos ^ self.size)) {
+					//error!("Buffer full!");
+					writeable = false;		// full ring buffer, same position but flipped parity bits
+					closest = min(closest, cursor_pos);
+				}
 			}
+			writeable = true;
+			self.until = closest;
+		} else {
+			error!(".");
+			writeable = true;
 		}
-		true
+
+		writeable
 	}
 
 
@@ -181,7 +191,7 @@ mod test {
 	use std::io::timer;
 	use std::fmt;
 	use std::task::{TaskBuilder};
-	use sync::Future;
+	use std::sync::Future;
 	use time::precise_time_ns;
 	use std::comm::TryRecvError;
 
@@ -197,11 +207,6 @@ mod test {
 				value: -1	// Negative value here helps catch bugs since counts will be wrong
 			}
 		}
-	}
-	impl fmt::Show for TestSlot {
-			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-					write!(f.buf, "{}", self.value)
-			}
 	}
 
 
@@ -372,7 +377,7 @@ mod test {
 		//move our reader's cursor so we can rollover
 		t.cursors.get(1).store(1);
 
-		for i in range(1, 1025) {
+		for i in range(1i, 1025i) {
 			t.write(Slot::new());
 
 			assert!(t.end == i);
@@ -380,7 +385,7 @@ mod test {
 
 		//move our reader's cursor so we can rollover again
 		t.cursors.get(1).store(1025);
-		for i in range(1, 1025) {
+		for i in range(1i, 1025i) {
 			t.write(Slot::new());
 		}
 		assert!(t.end == 0);
@@ -393,7 +398,7 @@ mod test {
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
-		let (tx, rx) = channel();
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
 
 		let mut future = Future::spawn(proc() {
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -425,11 +430,11 @@ mod test {
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
-		let (tx, rx) = channel();
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
 
 		let mut future = Future::spawn(proc() {
-			let mut counter = 0;
-			let mut last = -1;
+			let mut counter = 0i;
+			let mut last = -1i;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 
 				//error!("EP::data.len: {}", data.len());
@@ -454,7 +459,7 @@ mod test {
 
 		assert!(t.end == 0);
 
-		for i in range(0, 1000) {
+		for i in range(0i, 1000i) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
 			t.write(x);
@@ -475,11 +480,11 @@ mod test {
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
-		let (tx, rx) = channel();
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
 
 		let mut future = Future::spawn(proc() {
-			let mut counter = 0;
-			let mut last = -1;
+			let mut counter = 0i;
+			let mut last = -1i;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 				for x in data.iter() {
 					//error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
@@ -489,7 +494,7 @@ mod test {
 					//error!("EP::counter: {}", counter);
 				}
 
-				if counter == 1200 {
+				if counter >= 1200 {
 						return Err(());
 				} else {
 					return Ok(());
@@ -501,18 +506,15 @@ mod test {
 
 		assert!(t.end == 0);
 
-		for i in range(0, 1200) {
+		for i in range(0i, 1200i) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
 			//error!("______Writing {}", i);
 			t.write(x);
 
 		}
-		//error!("Test::end");
 		rx.recv_opt();
-		future.get();
 
-		//timer::sleep(10000);
 	}
 
 
@@ -522,123 +524,55 @@ mod test {
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
-		let (tx, rx) = channel();
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
 
 
 		let mut future = Future::spawn(proc() {
-			let mut counter = 0;
-			let mut last = -1;
+			let mut counter = 0i;
+			let mut last = -1i;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 
 				//error!("EP::data.len: {}", data.len());
 
 				for x in data.iter() {
-					//error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
 					//error!("counter: {}", counter);
 				}
 
-				if counter == 50000 {
+				if counter >= 50000 {
 						return Err(());
 				} else {
 					return Ok(());
 				}
 
 			});
+			error!("Event processor done");
 			tx.send(1);
+			return;
 		});
 
 		assert!(t.end == 0);
 
-		for i in range(0, 50000) {
+		for i in range(0i, 50001i) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
 			//error!("Writing {}", i);
 			t.write(x);
 
-			match rx.try_recv() {
-				Ok(v) => break,
-				_ => {}
-			}
+
 
 		}
-		//error!("Exit write loop");
-		//rx.recv_opt();
-		future.get();
-
+		error!("Exit write loop");
+		rx.recv_opt();
+		error!("Recv_opt done");
+		return;
 		//
 	}
 
-	#[test]
-	fn bench_turbine_10m() {
-		let mut t: Turbine<TestSlot> = Turbine::new(1048576);
-		let e1 = t.ep_new().unwrap();
-
-		let event_processor = t.ep_finalize(e1);
-		let (tx, rx) = channel();
 
 
-		let mut future = Future::spawn(proc() {
-			let mut counter = 0;
-			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-				for _ in data.iter() {
-					counter += data[0].value;
-				}
-
-				if counter == 10000000 {
-						return Err(());
-				} else {
-					return Ok(());
-				}
-
-			});
-			tx.send(1);
-		});
-
-		let start = precise_time_ns();
-		for i in range(0, 10000000) {
-			let mut s: TestSlot = Slot::new();
-			s.value = 1;
-			t.write(s);
-
-
-		}
-
-		//rx.recv_opt();
-		future.get();
-		let end = precise_time_ns();
-
-		error!("Total time: {}", (end-start) as f32 / 1000000f32);
-		error!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
-		//
-	}
-
-	#[test]
-	fn bench_chan_10m() {
-
-		let (tx_bench, rx_bench) = channel();
-
-
-		let mut future = Future::spawn(proc() {
-			for _ in range(0, 10000000)  {
-				tx_bench.send(1);
-			}
-
-		});
-
-		let start = precise_time_ns();
-		let mut counter = 0;
-		for i in range(0, 10000000) {
-			counter += rx_bench.recv();
-		}
-		let end = precise_time_ns();
-
-		future.get();
-
-		error!("Total time: {}", (end-start) as f32 / 1000000f32);
-		error!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
-	}
 
 }
