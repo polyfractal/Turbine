@@ -18,7 +18,7 @@ mod test {
 	use std::io::timer;
 	use std::fmt;
 	use std::task::{TaskBuilder};
-	use sync::Future;
+	use std::sync::Future;
 	use time::precise_time_ns;
 
 	//use TestSlot;
@@ -35,20 +35,15 @@ mod test {
 			}
 		}
 	}
-	impl fmt::Show for TestSlot {
-			fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-					write!(f.buf, "{}", self.value)
-			}
-	}
 
 	#[test]
 	fn bench_chan_10m() {
 
-		let (tx_bench, rx_bench) = channel();
+		let (tx_bench, rx_bench): (Sender<int>, Receiver<int>) = channel();
 
 
 		let mut future = Future::spawn(proc() {
-			for _ in range(0, 10000000)  {
+			for _ in range(0i, 10000000)  {
 				tx_bench.send(1);
 			}
 
@@ -56,7 +51,7 @@ mod test {
 
 		let start = precise_time_ns();
 		let mut counter = 0;
-		for i in range(0, 10000000) {
+		for i in range(0i, 10000000) {
 			counter += rx_bench.recv();
 		}
 		let end = precise_time_ns();
@@ -73,7 +68,7 @@ mod test {
 		let e1 = t.ep_new().unwrap();
 
 		let event_processor = t.ep_finalize(e1);
-		let (tx, rx) = channel();
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
 
 
 		let mut future = Future::spawn(proc() {
@@ -94,7 +89,7 @@ mod test {
 		});
 
 		let start = precise_time_ns();
-		for i in range(0, 10000000) {
+		for i in range(0i, 10000000) {
 			let mut s: TestSlot = Slot::new();
 			s.value = 1;
 			t.write(s);
