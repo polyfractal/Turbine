@@ -13,7 +13,6 @@ pub trait WaitStrategy {
 	fn until(&self, sequence: int, deps: &Vec<&Padded64>) -> int {
 		let mut next: Option<int> = None;
 
-		debug!("deps: {}", deps);
 		for v in deps.iter() {
 			let pos: int = v.load();
 
