@@ -1,10 +1,40 @@
 #![crate_id = "turbine"]
-
+//#![deny(missing_doc)]
 #![feature(phase)]
 #![feature(macro_rules)]
+
+
+//! Turbine is a high-performance, non-locking, inter-task communication library.
+//!
+//! Turbine is a spiritual port of the LMAX-Disruptor pattern.  Although the
+//! abstractions used in this library are different from those in the original
+//! Disruptor, they share similar concepts and operate on the same principle
+//!
+//! Turbine is essentially a channel on steroids, permitting data passing and
+//! communication between tasks in a very efficient manner.  Turbine uses a variety
+//! of techniques -- such as non-locking ring buffer, single producer, consumer
+//! dependency management and batching -- to produce very low latencies and high
+//! throughput.
+//!
+//! So why would you choose Turbine?  Turbine is excellent if it forms the core of
+//! your application.  Turbine, like Disruptor, is used if several consumers need
+//! act on the data in parallel, and then allow the "business" logic to execute.
+//! Further, Turbine is used when you need to process millions of events per second.
+//!
+//! On simple, synthetic tests, Turbine exceeds 30 million messages per second between
+//! tasks, while channels cap out around 4m (on the test hardware).
+//!
+//! That said, Turbine does not replace channels for a variety of reasons.
+//!
+//! - Channels are much simpler to use
+//! - Channels are more efficient if you have low or inconsistent communication requirements
+//! - Channels can be MPSC (multi-producer, single-consumer) while Turbine is SPMC
+//! - Turbine requires significant memory overhead to initialize (the ring buffer)
+//!
+
 #[phase(syntax, link)]
 
-//#![deny(missing_doc)]
+
 
 
 
@@ -44,7 +74,7 @@ pub struct Turbine<T> {
 	until: int
 }
 
-impl<T: Slot + Send> Turbine<T> {
+impl<T: Slot> Turbine<T> {
 	pub fn new(ring_size: uint) -> Turbine<T> {
 		let mut epb = Vec::with_capacity(8);
 
@@ -416,8 +446,7 @@ mod test {
 		t.write(x);
 
 		assert!(t.end == 1);
-		rx.recv_opt();
-		future.get();
+		if rx.recv_opt().is_err() == true {fail!()}
 		//debug!("Test::end");
 	}
 
@@ -464,8 +493,7 @@ mod test {
 		}
 
 		//timer::sleep(10000);
-		rx.recv_opt();
-		future.get();
+		if rx.recv_opt().is_err() == true {fail!()}
 		//debug!("Test::end");
 
 		//
@@ -473,7 +501,7 @@ mod test {
 
 
 	#[test]
-	fn test_write_read_many_rollover() {
+	fn test_write_read_many_with_rollover() {
 		let mut t: Turbine<TestSlot> = Turbine::new(1024);
 		let e1 = t.ep_new().unwrap();
 
@@ -511,7 +539,7 @@ mod test {
 			t.write(x);
 
 		}
-		rx.recv_opt();
+		if rx.recv_opt().is_err() == true {fail!()}
 
 	}
 
@@ -564,13 +592,156 @@ mod test {
 
 		}
 		debug!("Exit write loop");
-		rx.recv_opt();
+		if rx.recv_opt().is_err() == true {fail!()}
 		debug!("Recv_opt done");
 		return;
 		//
 	}
 
 
+	#[test]
+	fn test_two_readers() {
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
+		let e1 = t.ep_new().unwrap();
+		let e2 = t.ep_new().unwrap();
+
+		let event_processor = t.ep_finalize(e1);
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0i;
+			let mut last = -1i;
+			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				for x in data.iter() {
+					//debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					assert!(last + 1 == x.value);
+					counter += 1;
+					last = x.value;
+					//debug!("EP::counter: {}", counter);
+				}
+
+				if counter >= 1200 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx.send(1);
+		});
+
+		let event_processor2 = t.ep_finalize(e2);
+		let (tx2, rx2): (Sender<int>, Receiver<int>) = channel();
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0i;
+			let mut last = -1i;
+			event_processor2.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				for x in data.iter() {
+					//debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					assert!(last + 1 == x.value);
+					counter += 1;
+					last = x.value;
+					//debug!("EP::counter: {}", counter);
+				}
+
+				if counter >= 1200 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx2.send(1);
+		});
+
+		assert!(t.end == 0);
+
+		for i in range(0i, 1200i) {
+			let mut x: TestSlot = Slot::new();
+			x.value = i;
+			//debug!("______Writing {}", i);
+			t.write(x);
+
+		}
+		if rx.recv_opt().is_err() == true {fail!()}
+		if rx2.recv_opt().is_err() == true {fail!()}
+
+	}
+
+/*
+	#[test]
+	fn test_two_readers_dependency() {
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
+		let e1 = t.ep_new().unwrap();
+		let e2 = t.ep_new().unwrap();
+
+		t.ep_depends(e2, e1);
+
+		let event_processor = t.ep_finalize(e1);
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0i;
+			let mut last = -1i;
+			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				for x in data.iter() {
+					//debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					assert!(last + 1 == x.value);
+					counter += 1;
+					last = x.value;
+					//debug!("EP::counter: {}", counter);
+				}
+
+				if counter >= 1200 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx.send(1);
+		});
+
+		let event_processor2 = t.ep_finalize(e2);
+		let (tx2, rx2): (Sender<int>, Receiver<int>) = channel();
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0i;
+			let mut last = -1i;
+			event_processor2.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				for x in data.iter() {
+					//debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					assert!(last + 1 == x.value);
+					counter += 1;
+					last = x.value;
+					//debug!("EP::counter: {}", counter);
+				}
+
+				if counter >= 1200 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx2.send(1);
+		});
+
+		assert!(t.end == 0);
+
+		for i in range(0i, 1200i) {
+			let mut x: TestSlot = Slot::new();
+			x.value = i;
+			//debug!("______Writing {}", i);
+			t.write(x);
+
+		}
+		rx.recv_opt();
+		rx2.recv_opt();
+
+	}
+	*/
 
 
 }
