@@ -63,8 +63,8 @@ mod test {
 
 		future.get();
 
-		error!("Total time: {}", (end-start) as f32 / 1000000f32);
-		error!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
+		debug!("Total time: {}", (end-start) as f32 / 1000000f32);
+		debug!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
 	}
 
 	#[test]
@@ -109,8 +109,8 @@ mod test {
 		future.get();
 		let end = precise_time_ns();
 
-		error!("Total time: {}", (end-start) as f32 / 1000000f32);
-		error!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
+		debug!("Total time: {}", (end-start) as f32 / 1000000f32);
+		debug!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
 		//
 	}
 }

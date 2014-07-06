@@ -121,7 +121,7 @@ impl<T: Slot + Send> Turbine<T> {
 
 		// Busy spin
 		loop {
-			error!("Spin...");
+			debug!("Spin...");
 			match self.can_write() {
 				true => break,
 				false => {}
@@ -129,7 +129,7 @@ impl<T: Slot + Send> Turbine<T> {
 		}
 
 		let write_pos = self.end & (self.mask);
-		error!("end is {}, writing to {}", self.end, write_pos);
+		debug!("end is {}, writing to {}", self.end, write_pos);
 		unsafe {
 			self.ring.write(write_pos as uint, data);
 		}
@@ -137,26 +137,25 @@ impl<T: Slot + Send> Turbine<T> {
 
 
 		let adjusted_pos = self.increment(self.end);
-		error!("adjusted_pos is {}", adjusted_pos);
+		debug!("adjusted_pos is {}", adjusted_pos);
 		self.end = adjusted_pos;
 		self.cursors.get(0).store(adjusted_pos);
-		error!("Write complete.")
+		debug!("Write complete.")
 
 	}
 
 	fn can_write(&mut self) -> bool {
-		//return cb->end == (cb->start ^ cb->size);
 		let mut writeable = false;
 
-		error!("Until is: {}", self.until);
+		debug!("Until is: {}", self.until);
 		if self.until == self.end {
-			error!("*");
+			debug!("*");
 			let mut closest = (self.size * 2) + 1;
 
 			for v in self.cursors.iter().skip(1) {
 				let cursor_pos = v.load();
 				if (self.end == (cursor_pos ^ self.size)) {
-					//error!("Buffer full!");
+					debug!("Buffer full!");
 					writeable = false;		// full ring buffer, same position but flipped parity bits
 					closest = min(closest, cursor_pos);
 				}
@@ -164,7 +163,6 @@ impl<T: Slot + Send> Turbine<T> {
 			writeable = true;
 			self.until = closest;
 		} else {
-			error!(".");
 			writeable = true;
 		}
 
@@ -402,10 +400,10 @@ mod test {
 
 		let mut future = Future::spawn(proc() {
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-				//error!("data[0].value: {}", data[0].value);
+				//debug!("data[0].value: {}", data[0].value);
 				assert!(data.len() == 1);
 				assert!(data[0].value == 19);
-				//error!("EP:: Done");
+				//debug!("EP:: Done");
 				return Err(());
 			});
 			tx.send(1);
@@ -420,7 +418,7 @@ mod test {
 		assert!(t.end == 1);
 		rx.recv_opt();
 		future.get();
-		//error!("Test::end");
+		//debug!("Test::end");
 	}
 
 
@@ -437,14 +435,14 @@ mod test {
 			let mut last = -1i;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 
-				//error!("EP::data.len: {}", data.len());
+				//debug!("EP::data.len: {}", data.len());
 
 				for x in data.iter() {
-				//	error!("EP:: last: {}, value: {}", last, x.value);
+				//	debug!("EP:: last: {}, value: {}", last, x.value);
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
-					//error!("EP::counter: {}", counter);
+					//debug!("EP::counter: {}", counter);
 				}
 
 				if counter == 1000 {
@@ -468,7 +466,7 @@ mod test {
 		//timer::sleep(10000);
 		rx.recv_opt();
 		future.get();
-		//error!("Test::end");
+		//debug!("Test::end");
 
 		//
 	}
@@ -487,11 +485,11 @@ mod test {
 			let mut last = -1i;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 				for x in data.iter() {
-					//error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					//debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
-					//error!("EP::counter: {}", counter);
+					//debug!("EP::counter: {}", counter);
 				}
 
 				if counter >= 1200 {
@@ -509,7 +507,7 @@ mod test {
 		for i in range(0i, 1200i) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
-			//error!("______Writing {}", i);
+			//debug!("______Writing {}", i);
 			t.write(x);
 
 		}
@@ -532,14 +530,14 @@ mod test {
 			let mut last = -1i;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 
-				//error!("EP::data.len: {}", data.len());
+				//debug!("EP::data.len: {}", data.len());
 
 				for x in data.iter() {
-					error!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
 					assert!(last + 1 == x.value);
 					counter += 1;
 					last = x.value;
-					//error!("counter: {}", counter);
+					//debug!("counter: {}", counter);
 				}
 
 				if counter >= 50000 {
@@ -549,7 +547,7 @@ mod test {
 				}
 
 			});
-			error!("Event processor done");
+			debug!("Event processor done");
 			tx.send(1);
 			return;
 		});
@@ -559,15 +557,15 @@ mod test {
 		for i in range(0i, 50001i) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i;
-			//error!("Writing {}", i);
+			//debug!("Writing {}", i);
 			t.write(x);
 
 
 
 		}
-		error!("Exit write loop");
+		debug!("Exit write loop");
 		rx.recv_opt();
-		error!("Recv_opt done");
+		debug!("Recv_opt done");
 		return;
 		//
 	}

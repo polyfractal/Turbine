@@ -13,11 +13,11 @@ pub trait WaitStrategy {
 	fn until(&self, sequence: int, deps: &Vec<&Padded64>) -> int {
 		let mut next: Option<int> = None;
 
-		//error!("deps: {}", deps);
+		debug!("deps: {}", deps);
 		for v in deps.iter() {
 			let pos: int = v.load();
 
-			//error!("Dep: {}, Sequence: {}", pos, sequence);
+			debug!("Dep: {}, Sequence: {}", pos, sequence);
 			if pos != -1 {
 				let adjusted = match pos < sequence {
 					true => pos + self.get_ring_size() as int,
@@ -38,7 +38,7 @@ pub trait WaitStrategy {
 			Some(p) => p
 		};
 
-		//error!("WaitStrategy::until:  {}", final);
+		debug!("WaitStrategy::until:  {}", final);
 		final
 	}
 
@@ -72,24 +72,23 @@ impl WaitStrategy for BusyWait {
 				None => {}
 			}
 		}
-		//error!("					Wait done, returning {}", available);
+		debug!("					Wait done, returning {}", available);
 		available as uint
 	}
 
 	fn can_read(&self, sequence: int, deps: &Vec<&Padded64>) -> Option<int> {
-		//return cb->end == (cb->start ^ cb->size);
 		let mut min_cursor = (self.ring_size * 2) as int + 1;
 
 		for v in deps.iter() {
 			let cursor = v.load();
-			//error!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
+			debug!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
 
 			if sequence == cursor {
 				return None;	// at same position as a dependency. we can't move
 			}
 			min_cursor = min(min_cursor, cursor);
-			//error!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
-			//error!("					min_cursor: {}", min_cursor);
+			debug!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
+			debug!("					min_cursor: {}", min_cursor);
 
 			//if sequence == (cursor ^ self.ring_size as int) {
 			//	return false;	// full ring buffer, same position but flipped parity bits

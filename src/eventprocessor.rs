@@ -39,7 +39,7 @@ impl<T: Slot> EventProcessor<T> {
 			deps.push((*self.cursors).get(*ep));
 		}
 		drop(dep_eps);
-		//error!("					Token: {}", self.token);
+
 		let cursor = (*self.cursors).get(self.token + 1);
 
 		let mask: uint  = capacity - 1;
@@ -49,24 +49,24 @@ impl<T: Slot> EventProcessor<T> {
 
 		loop {
 			let c = internal_cursor;	//cursor.load();
-			error!("              Current: {}, waiting on: {}", c, c);
+			debug!("              Current: {}, waiting on: {}", c, c);
 
 			let mut available: uint = wait_strategy.wait_for(c, &deps) - 1;
-			error!("							Available: {}", available);
+			debug!("							Available: {}", available);
 
 			let from = c as uint & mask;
 			let mut to = available & mask;
 
 
-			error!("              from: {}, to: {} -- {}", from, to, (to < from));
+			debug!("              from: {}, to: {} -- {}", from, to, (to < from));
 			if (to < from){
 				rollover = match from == to {
 					true => (false, 0),	// If the rollover lands exactly on the ring size, no need fetch second half
 					false =>(true, to)
 				};
-				error!("							{}", rollover);
+				debug!("							{}", rollover);
 				to = capacity - 1;
-				error!("              ROLLOVER B!  to is now: {}", to);
+				debug!("              ROLLOVER B!  to is now: {}", to);
 
 			}
 
@@ -81,8 +81,8 @@ impl<T: Slot> EventProcessor<T> {
 			};
 
 			if rollover.val0() == true  {
-				error!("              ROLLOVER C!");
-				error!("							{}", rollover);
+				debug!("              ROLLOVER C!");
+				debug!("							{}", rollover);
 				let status = unsafe {
 					let data: &[T] = self.ring.get(0, rollover.val1() + 1);
 					f(data)
@@ -91,18 +91,17 @@ impl<T: Slot> EventProcessor<T> {
 			}
 
 			let adjusted_pos = self.increment(available as int, capacity as int);
-			error!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
+			debug!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
 			internal_cursor = adjusted_pos;
 			cursor.store(adjusted_pos);
 
-			//timer::sleep(1000);
 			match status {
 				Err(_) => break,
 				Ok(_) => {}
 			};
 
 		}
-		error!("BusyWait::end");
+		debug!("BusyWait::end");
 	}
 
 	fn increment(&self, p: int, size: int) -> int {
