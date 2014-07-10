@@ -7,14 +7,15 @@ use std::cmp::{min, max};
 pub trait WaitStrategy {
 	fn new(ring_size: uint) -> Self;
 	fn get_ring_size(&self) -> uint;
-	fn wait_for(&self, sequence: int, ep: &Vec<&Padded64>) -> uint;
-	fn can_read(&self, sequence: int, deps: &Vec<&Padded64>) -> Option<int>;
+	fn wait_for(&self, sequence: u64, ep: &Vec<&Padded64>) -> u64;
+	fn can_read(&self, sequence: u64, deps: &Vec<&Padded64>) -> Option<u64>;
 
-	fn until(&self, sequence: int, deps: &Vec<&Padded64>) -> int {
-		let mut next: Option<int> = None;
+	/*
+	fn until(&self, sequence: u64, deps: &Vec<&Padded64>) -> u64 {
+		let mut next: Option<u64> = None;
 
 		for v in deps.iter() {
-			let pos: int = v.load();
+			let pos: u64 = v.load();
 
 			debug!("Dep: {}, Sequence: {}", pos, sequence);
 			if pos != -1 {
@@ -40,6 +41,7 @@ pub trait WaitStrategy {
 		debug!("WaitStrategy::until:  {}", final);
 		final
 	}
+	*/
 
 }
 
@@ -52,7 +54,7 @@ impl WaitStrategy for BusyWait {
 	fn new(ring_size: uint) -> BusyWait {
 		BusyWait {
 			ring_size: ring_size,
-			ring_mask: ring_size -1
+			ring_mask: ring_size - 1
 		}
 	}
 
@@ -60,8 +62,9 @@ impl WaitStrategy for BusyWait {
 		self.ring_size
 	}
 
-	fn wait_for(&self, sequence: int, deps: &Vec<&Padded64>) -> uint {
-		let mut available = 0;
+	fn wait_for(&self, sequence: u64, deps: &Vec<&Padded64>) -> u64 {
+		let mut available: u64 = 0;
+		debug!("					Waiting for: {}", sequence);
 		loop {
 			match self.can_read(sequence, deps) {
 				Some(v) => {
@@ -72,26 +75,24 @@ impl WaitStrategy for BusyWait {
 			}
 		}
 		debug!("					Wait done, returning {}", available);
-		available as uint
+		available
 	}
 
-	fn can_read(&self, sequence: int, deps: &Vec<&Padded64>) -> Option<int> {
-		let mut min_cursor = (self.ring_size * 2) as int + 1;
+	fn can_read(&self, sequence: u64, deps: &Vec<&Padded64>) -> Option<u64> {
+		let mut min_cursor = 18446744073709551615;
 
 		for v in deps.iter() {
 			let cursor = v.load();
-			debug!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
+			debug!("					cursor: {}", cursor);
 
 			if sequence == cursor {
+				debug!("					Same as dep cursor, abort!");
 				return None;	// at same position as a dependency. we can't move
 			}
 			min_cursor = min(min_cursor, cursor);
-			debug!("					dep cursor: {}, ring_size: {}, sequence: {}, calculation: {}", cursor, self.ring_size as int, sequence, sequence == (cursor ^ self.ring_size as int));
+			debug!("					dep cursor: {}, ring_size: {}, sequence: {}", cursor, self.ring_size as int, sequence);
 			debug!("					min_cursor: {}", min_cursor);
 
-			//if sequence == (cursor ^ self.ring_size as int) {
-			//	return false;	// full ring buffer, same position but flipped parity bits
-			//}
 		}
 		Some(min_cursor)
 	}

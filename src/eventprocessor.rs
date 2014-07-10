@@ -42,58 +42,50 @@ impl<T: Slot> EventProcessor<T> {
 
 		let cursor = (*self.cursors).get(self.token + 1);
 
-		let mask: uint  = capacity - 1;
+		let mask: u64 = capacity as u64 - 1;
+		let mut internal_cursor = cursor.load();
 		let mut rollover = (false, 0);
 
-		let mut internal_cursor = cursor.load();
-
 		loop {
-			let c = internal_cursor;	//cursor.load();
-			debug!("              Current: {}, waiting on: {}", c, c);
+			debug!("              Current: {}, waiting on: {}", internal_cursor, internal_cursor);
 
-			let mut available: uint = wait_strategy.wait_for(c, &deps) - 1;
+			let mut available = wait_strategy.wait_for(internal_cursor, &deps);
 			debug!("							Available: {}", available);
 
-			let from = c as uint & mask;
-			let mut to = available & mask;
-
+			let from = (internal_cursor & mask) as uint;
+			let mut to = (available & mask) as uint;
 
 			debug!("              from: {}, to: {} -- {}", from, to, (to < from));
-			if (to < from){
-				rollover = match from == to {
-					true => (false, 0),	// If the rollover lands exactly on the ring size, no need fetch second half
-					false =>(true, to)
-				};
-				debug!("							{}", rollover);
-				to = capacity - 1;
-				debug!("              ROLLOVER B!  to is now: {}", to);
-
+			if to < from {
+				debug!("						ROLLOVER");
+				rollover = (true, to);
+				to = capacity;
 			}
 
+
+			debug!("              Post-modification from: {}, to: {} -- {}", from, to, (to < from));
 
 			// This is safe because the Producer task cannot invalidate these slots
 			// before we increment our cursor.  Since the slice is borrowed out, we
 			// know it will be returned after the function call ends.  The slice will
 			// be dropped after the unsafe block, and *then* we increment our cursor
 			let status = unsafe {
-				let data: &[T] = self.ring.get(from, to + 1);
+				let data: &[T] = self.ring.get(from, to);
 				f(data)
 			};
 
-			if rollover.val0() == true  {
-				debug!("              ROLLOVER C!");
-				debug!("							{}", rollover);
+			if rollover.val0() == true {
+				debug!("ROlLOVER GET");
 				let status = unsafe {
-					let data: &[T] = self.ring.get(0, rollover.val1() + 1);
+					let data: &[T] = self.ring.get(0, rollover.val1());
 					f(data)
 				};
-				rollover = (false, 0);
+				rollover = (false,0);
 			}
 
-			let adjusted_pos = self.increment(available as int, capacity as int);
-			debug!("              available: {}, adjusted_pos: {}", available, adjusted_pos);
-			internal_cursor = adjusted_pos;
-			cursor.store(adjusted_pos);
+			internal_cursor = available;
+			cursor.store(internal_cursor);
+			debug!("					Finished processing event.  Cursor @ {} ({})", available, available & mask);
 
 			match status {
 				Err(_) => break,
@@ -103,9 +95,4 @@ impl<T: Slot> EventProcessor<T> {
 		}
 		debug!("BusyWait::end");
 	}
-
-	fn increment(&self, p: int, size: int) -> int {
-		(p + 1) & ((2 * size) - 1)
-	}
-
 }
