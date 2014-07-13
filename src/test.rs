@@ -70,7 +70,6 @@ mod test {
 		let event_processor = t.ep_finalize(e1);
 		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
 
-
 		let mut future = Future::spawn(proc() {
 			let mut counter = 0;
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -93,19 +92,14 @@ mod test {
 			let mut s: TestSlot = Slot::new();
 			s.value = 1;
 			t.write(s);
-
-			match rx.try_recv() {
-				Ok(v) => break,
-				_ => {}
-			}
 		}
 
-		//rx.recv_opt();
-		future.get();
+		rx.recv_opt();
 		let end = precise_time_ns();
 
-		debug!("Total time: {}", (end-start) as f32 / 1000000f32);
-		debug!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
+
+		//debug!("Total time: {}", (end-start) as f32 / 1000000f32);
+		//debug!("ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
 		//
 	}
 }

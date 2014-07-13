@@ -60,6 +60,13 @@ impl<T: Slot> EventProcessor<T> {
 				debug!("						ROLLOVER");
 				rollover = (true, to);
 				to = capacity;
+			} else if (to == from) && (internal_cursor < available) {
+				//complete buffer request
+				debug!("						ROLLOVER (total) -- ({} == {}) && ({} < {})", to, from, internal_cursor, available);
+				rollover = (true, to);
+				to = capacity;
+			} else if (to == from) {
+				debug!("						WTF to == from    -- ({} == {}) && ({} < {})", to, from, internal_cursor, available);
 			}
 
 

@@ -170,14 +170,20 @@ impl<T: Slot> Turbine<T> {
 	}
 
 	fn can_write(&mut self) -> bool {
-		debug!("Until is: {} ({})", self.until, self.until & self.mask);
-		debug!("Current is: {} ({})", self.current_pos, self.current_pos & self.mask);
+		/*
+		debug!("Until is: {} ({})  --  Current is: {} ({})  -- {}",
+							self.until, self.until & self.mask,
+							self.current_pos, self.current_pos & self.mask,
+							self.until == (self.current_pos & self.mask));
+		*/
+		debug!("{} == {} ({} & {})  -- {}", self.until, self.current_pos & self.mask, self.current_pos, self.mask, self.until == (self.current_pos & self.mask));
 
 		if self.until == (self.current_pos & self.mask) {
 			debug!("*****");
 
 			let mut min_cursor = 18446744073709551615;
 			for v in self.cursors.iter().skip(1) {
+				debug!("CURSOR: {}", v.load());
 				//let diff = self.current_pos - v.load();
 				min_cursor = min(min_cursor, v.load());
 
@@ -187,22 +193,30 @@ impl<T: Slot> Turbine<T> {
 				}
 			}
 
+			/*
 			self.until = if (self.current_pos & self.mask) > (min_cursor & self.mask) {
-				// current_pos & mask: 988, min_cursor & mask: 795
+				// 1025					1024
+				// current_pos & mask: 1, min_cursor & mask: 0
 				// avail = (1024 - 988) + 795
 				debug!("UNTIL DECISION: Current > Min");
 				debug!("{} + ({} - {}) + {}", self.current_pos, self.size, (self.current_pos & self.mask), (min_cursor & self.mask));
-				(self.size as u64 - (self.current_pos & self.mask)) + (min_cursor & self.mask)
+				self.current_pos + (self.size as u64 - (self.current_pos & self.mask)) + (min_cursor & self.mask)
+			} else if (self.current_pos & self.mask) == (min_cursor & self.mask) {
+				debug!("UNTIL DECISION: Current == Min");
+				self.current_pos + (self.until + 1) & self.mask
 			} else {
 				// current already wrapped
-				// current_pos & mask: 5, min_cursor & mask: 795
-				// avail = (1024 - 795) + 5 == 234
+				// current_pos & mask: 0, min_cursor & mask: 1
+				// avail = (1024 - 1) + 0 == 234
 				debug!("UNTIL DECISION: Current < Min");
-				debug!("{} + ({} - {}) + {}", self.current_pos,  self.size, (min_cursor & self.mask), self.current_pos & self.mask);
+				debug!("{} + ({} - {}) + {}", self.current_pos, self.size, (min_cursor & self.mask), self.current_pos & self.mask);
 
-				//self.current_pos + (self.size as u64 - (min_cursor & self.mask)) + (self.current_pos & self.mask)
-				min_cursor & self.mask
+				self.current_pos + (self.size as u64 - (min_cursor & self.mask)) + (self.current_pos & self.mask)
+				//self.current_pos + (min_cursor & self.mask)
 			};
+			*/
+
+			self.until = min_cursor & self.mask;
 
 			//self.until = self.current_pos + (min_cursor & self.mask);
 			debug!("current_pos: {}, min_cursor: {}, new until: {}", self.current_pos, min_cursor, self.until);
@@ -227,6 +241,7 @@ mod test {
 	use std::sync::Future;
 	use time::precise_time_ns;
 	use std::comm::TryRecvError;
+	use std::rand;
 
 	//use TestSlot;
 
@@ -242,7 +257,7 @@ mod test {
 		}
 	}
 
-/*
+
 	#[test]
 	fn test_init() {
 		let t: Turbine<TestSlot> = Turbine::new(1024);
@@ -543,7 +558,6 @@ mod test {
 		if rx.recv_opt().is_err() == true {fail!()}
 
 	}
-*/
 
 	#[test]
 	fn test_write_read_large() {
@@ -584,7 +598,60 @@ mod test {
 		for i in range(0u64, 50001) {
 			let mut x: TestSlot = Slot::new();
 			x.value = i as int;
-			//debug!("Writing {}", i);
+			debug!("Writing {}", i);
+			t.write(x);
+		}
+
+		debug!("Exit write loop");
+		if rx.recv_opt().is_err() == true {fail!()}
+		debug!("Recv_opt done");
+		return;
+		//
+	}
+
+
+	#[test]
+	fn test_random_ep_pause() {
+		let mut t: Turbine<TestSlot> = Turbine::new(1024);
+		let e1 = t.ep_new().unwrap();
+
+		let event_processor = t.ep_finalize(e1);
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0i;
+			let mut last = -1i;
+			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				let sleep_time = rand::random::<(u8)>() as u64;
+				debug!("												SLEEPING {}", sleep_time);
+				timer::sleep(sleep_time);
+				debug!("												DONE SLEEPING");
+
+				for x in data.iter() {
+					debug!("									>>>>>>>>>>>>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
+					assert!(last + 1 == x.value);
+					counter += 1;
+					last = x.value;
+					//debug!("counter: {}", counter);
+				}
+
+				if counter >= 50000 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			debug!("Event processor done");
+			tx.send(1);
+			return;
+		});
+
+		for i in range(0u64, 50001) {
+			let mut x: TestSlot = Slot::new();
+			x.value = i as int;
+			debug!("Writing {} -----------------------------------------------------", i);
 			t.write(x);
 		}
 
@@ -665,8 +732,7 @@ mod test {
 		if rx2.recv_opt().is_err() == true {fail!()}
 
 	}
-*/
-/*
+
 	#[test]
 	fn test_two_readers_dependency() {
 		let mut t: Turbine<TestSlot> = Turbine::new(1024);
