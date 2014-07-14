@@ -3,51 +3,50 @@ use eventprocessor::EventProcessor;
 use paddedatomics::Padded64;
 use std::cmp::{min, max};
 
-
+/// A trait which provides a unified interface to various waiting strategies
 pub trait WaitStrategy {
+
+	/// Instantiate a new WaitStrategy. Must provide the size of the underlying buffer
 	fn new(ring_size: uint) -> Self;
+
+	/// Get the underlying max buffer capacity
 	fn get_ring_size(&self) -> uint;
+
+	/// Wait for the requested sequence, but return the largest available
+	///
+	/// Provided a target cursor position and a slice of dependency cursors,
+	/// this method will block until a slot is available to read from.  The method
+	/// of blocking varies depending on the implementation (e.g. busy-wait, sleep, etc).
+	///
+	/// This method should return the highest available position in the buffer to
+	/// allow EventProcessors to batch reads
 	fn wait_for(&self, sequence: u64, ep: &Vec<&Padded64>) -> u64;
-	fn can_read(&self, sequence: u64, deps: &Vec<&Padded64>) -> Option<u64>;
-
-	/*
-	fn until(&self, sequence: u64, deps: &Vec<&Padded64>) -> u64 {
-		let mut next: Option<u64> = None;
-
-		for v in deps.iter() {
-			let pos: u64 = v.load();
-
-			debug!("Dep: {}, Sequence: {}", pos, sequence);
-			if pos != -1 {
-				let adjusted = match pos < sequence {
-					true => pos + self.get_ring_size() as int,
-					false => pos
-				};
-
-				next = match next {
-					None => Some(adjusted),
-					Some(p) => {
-						Some(min(p, adjusted))
-					}
-				}
-			}
-		}
-
-		let final = match next {
-			None => -1,
-			Some(p) => p
-		};
-
-		debug!("WaitStrategy::until:  {}", final);
-		final
-	}
-	*/
-
 }
 
 pub struct BusyWait {
 	ring_size: uint,
   ring_mask: uint
+}
+
+impl BusyWait {
+	fn can_read(&self, sequence: u64, deps: &Vec<&Padded64>) -> Option<u64> {
+		let mut min_cursor = 18446744073709551615;
+
+		for v in deps.iter() {
+			let cursor = v.load();
+			debug!("					cursor: {}", cursor);
+
+			if sequence == cursor {
+				debug!("					Same as dep cursor, abort!");
+				return None;	// at same position as a dependency. we can't move
+			}
+			min_cursor = min(min_cursor, cursor);
+			debug!("					dep cursor: {}, ring_size: {}, sequence: {}", cursor, self.ring_size as int, sequence);
+			debug!("					min_cursor: {}", min_cursor);
+
+		}
+		Some(min_cursor)
+	}
 }
 
 impl WaitStrategy for BusyWait {
@@ -76,24 +75,5 @@ impl WaitStrategy for BusyWait {
 		}
 		debug!("					Wait done, returning {}", available);
 		available
-	}
-
-	fn can_read(&self, sequence: u64, deps: &Vec<&Padded64>) -> Option<u64> {
-		let mut min_cursor = 18446744073709551615;
-
-		for v in deps.iter() {
-			let cursor = v.load();
-			debug!("					cursor: {}", cursor);
-
-			if sequence == cursor {
-				debug!("					Same as dep cursor, abort!");
-				return None;	// at same position as a dependency. we can't move
-			}
-			min_cursor = min(min_cursor, cursor);
-			debug!("					dep cursor: {}, ring_size: {}, sequence: {}", cursor, self.ring_size as int, sequence);
-			debug!("					min_cursor: {}", min_cursor);
-
-		}
-		Some(min_cursor)
 	}
 }
