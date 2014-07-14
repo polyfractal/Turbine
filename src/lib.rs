@@ -30,7 +30,7 @@
 //! - Channels are more efficient if you have low or inconsistent communication requirements
 //! - Channels can be MPSC (multi-producer, single-consumer) while Turbine is SPMC
 //! - Turbine requires significant memory overhead to initialize (the ring buffer)
-//!
+
 
 #[phase(syntax, link)]
 
@@ -62,7 +62,7 @@ mod paddedatomics;
 mod atomicnum;
 mod ringbuffer;
 
-
+/// The main Turbine structure, which controls the operation of this library.
 pub struct Turbine<T> {
 	finalized: bool,
 	epb: Vec<Option<Vec<uint>>>,
@@ -76,6 +76,23 @@ pub struct Turbine<T> {
 }
 
 impl<T: Slot> Turbine<T> {
+
+	/// Create a new Turbine object with a buffer size of `ring_size`.  The buffer
+	/// capacity is immediately allocated for performance reasons - there is no lazy
+	/// loading.  Turbine is instantiated with a type parameter corresponding to your
+	/// custom Slot implementation.  This type will populate all the locations in the
+	/// buffer.  See the documentation for `Slot` for more details.
+	///
+	/// The buffer size **must** be a power of two.
+	///
+	/// # Example
+	///
+	/// ```
+	/// fn init_turbine() {
+	///   let t: Turbine<TestSlot> = Turbine::new(1024);
+	/// }
+	/// ```
+	///
 	pub fn new(ring_size: uint) -> Turbine<T> {
 		let mut epb = Vec::with_capacity(8);
 
@@ -92,6 +109,29 @@ impl<T: Slot> Turbine<T> {
 		}
 	}
 
+	/// Add a new EventProcessor to the dependency graph.
+	///
+	/// Event processors can be thought of as "consumers" or "readers" of the
+	/// datastructure.  They are granted read-only access to data that has been
+	/// placed inside of the buffer. You have may (theoretically) have as many EPs
+	/// as you wish.
+	///
+	/// This method returns a Result.  On success, it contains a UInt which
+	/// represents the internal index of the EP.  On failure, the Err is empty.
+	/// Failure occurs if the graph has been `finalized`
+	///
+	///## Example
+	///
+	///```
+	///fn test_create_epb() {
+	///  let mut t: Turbine<TestSlot> = Turbine::new(1024);
+	///  let e1 = match t.ep_new() {
+	///    Ok(ep) => ep,
+	///    Err(_) => fail!("Failed to create new EventProcessor!")
+	///  };
+	///}
+	///```
+	///
 	pub fn ep_new(&mut self) -> Result<uint, ()> {
 		match self.finalized {
 			true => Err(()),
@@ -102,6 +142,69 @@ impl<T: Slot> Turbine<T> {
 		}
 	}
 
+	/// Add `dep` as a dependency to the EventProcessor at `epb_index`.
+	///
+	/// EventProcessors may "depend" on one or more EventProcessors.  This links
+	/// them in a directed graph, such that forward progress in the buffer cannot
+	/// proceed until all dependencies have seen a particular event.
+	///
+	/// Practically speaking, this means you could have a "Business Logic" EP that
+	/// only processes an event after a "Disk Persistence" EP has committed the
+	/// data to disk.
+	///
+	/// EPs may be linked in arbitrarily complex chains (e.g. several levels deep,
+	/// multiple dependencies, dependencies on different levels of the tree, etc).
+	/// However, there is currently *no* protection against cylces.  Behavior is
+	/// undefined (likely a fatal error) if you introduce a cycle.
+	///
+	/// This method returns a Result.  Both success and error Results are empty.
+	/// Failure occurs if the graph has been `finalized`.
+	///
+	///## Simple Example
+	///
+	///```
+	///fn test_depends() {
+	///	let mut t: Turbine<TestSlot> = Turbine::new(1024);
+	///
+	///	let e1 = t.ep_new().unwrap();
+	///	let e2 = t.ep_new().unwrap();
+  ///
+	///	t.ep_depends(e2, e1);	// ep2 depends on ep1
+	///}
+	///```
+	/// *Note: `.unwrap()`` is used to make the example more readable*
+	///
+	///## A more complicated Exampe
+	/// This example builds a more complicated graph, which can be visualized as:
+	///
+	///```
+	///Graph layout:
+	///
+	///e6 --> e1 <-- e2
+	///       ^      ^
+	///       |      |
+	///       +---- e3 <-- e4 <-- e5
+	///```
+	///
+	///```
+	///fn test_many_depends() {
+	///	let mut t: Turbine<TestSlot> = Turbine::new(1024);
+	///	let e1 = t.ep_new().unwrap();
+	///	let e2 = t.ep_new().unwrap();
+	///	let e3 = t.ep_new().unwrap();
+	///	let e4 = t.ep_new().unwrap();
+	///	let e5 = t.ep_new().unwrap();
+	///	let e6 = t.ep_new().unwrap();
+	///
+	///	t.ep_depends(e2, e1);		//e2 depends on e1
+	///	t.ep_depends(e5, e4);		//e5 depends on e4
+	///	t.ep_depends(e3, e1);		//e3 depends on e1
+	///	t.ep_depends(e4, e3);		//e4 depends on e3
+	///	t.ep_depends(e3, e2);		//e3 depends on e2
+	///}
+	///```
+	///*Note: `.unwrap()` is used to make the example more readable*
+	///
 	pub fn ep_depends(&mut self, epb_index: uint, dep: uint) -> Result<(),()> {
 		if self.finalized == true {
 			return Err(());
@@ -117,6 +220,34 @@ impl<T: Slot> Turbine<T> {
 		Ok(())
 	}
 
+	/// Finalize the internal EventProcessorBuilder and obtain an EventProcessor.
+	///
+	/// When building the graph, the user is dealing with integers that represent
+	/// internal objects.  Once the dependency graph has been constructed, the
+	/// user must finalize the graph and exchange index tokens for real EventProcessors.
+	///
+	/// If an EP has no dependencies, it automatically gains the "root" cursor as
+	/// its dependency (e.g. the writer cursor).
+	///
+	/// Once finalize has been called (for any EP), no further EPs or dependencies
+	/// may be added.
+	///
+	///# Example
+	///
+	///```
+	///fn test_finalize) {
+	///  let mut t: Turbine<TestSlot> = Turbine::new(1024);
+	///
+	///  let e1: uint = t.ep_new().unwrap();
+	///  let e2 = t.ep_new().unwrap();
+	///
+	///  t.ep_depends(e2, e1);	// ep2 depends on ep1
+	///
+	///  let ep1: EventProcessor<TestSlot> = t.finalize(e1);
+	///  let ep2 = t.finalize(e2);
+	///}
+	///```
+	///*Note: `.unwrap()` is used to make the example more readable*
 	pub fn ep_finalize(&mut self, token: uint) -> EventProcessor<T> {
 		if self.finalized == false {
 			self.finalize_graph();
@@ -125,6 +256,18 @@ impl<T: Slot> Turbine<T> {
 		EventProcessor::<T>::new(self.ring.clone(), self.graph.clone(), self.cursors.clone(), token)
 	}
 
+	/// Finalize the dependency graph.
+	///
+	/// Internally, this converts the dependencies into an adjacency list.
+	/// The index of an item in the adjacency list represents it's cursor ID, while
+	/// the values at that index represent that EP's dependencies.  A second vector
+	/// is maintained which holds the actual cursors.
+	///
+	/// In practice, code will look up the dependencies in the graph, then use the
+	/// retrieved values to read specific cursor values.
+	///
+	/// The first cursor is the "root" cursor and belongs to the writer.
+	///
 	fn finalize_graph(&mut self) {
 		let mut eps: Vec<Vec<uint>> = Vec::with_capacity(self.epb.len());
 		let mut cursors: Vec<Padded64> = Vec::with_capacity(self.epb.len() + 1);
@@ -147,6 +290,31 @@ impl<T: Slot> Turbine<T> {
 		self.finalized = true;
 	}
 
+	/// Write data into Turbine
+	///
+	/// All writes in Turbine go through the thread that owns the original Turbine
+	/// object.  This makes Turbine a Single Producer Multi Consumer queue (of sorts).
+	/// By being Single Producer, the writing code is much simpler to make lock-free.
+	///
+	/// The write method maintains an internal `until` value which allows it to
+	/// minimize reads on the EP Atomics, which reduces inter-core communication.
+	/// The write method will busy-spin until a free slot is open.
+	///
+	///# Example
+	///
+	///```
+	///fn test_write_one() {
+	///  let mut t: Turbine<TestSlot> = Turbine::new(1024);
+	///  let e1 = t.ep_new().unwrap();
+	///
+	///  let event_processor = t.ep_finalize(e1);
+	///
+	///  let d: TestSlot = Slot::new();	// Instantiate a new TestSlot
+	///  d.value = 19;					    // Our TestSlot has a public `value` variable
+	///  t.write(d);						// Write the slot to Turbine
+	///}
+	///```
+	///
 	pub fn write(&mut self, data: T) {
 
 		// Busy spin
@@ -170,13 +338,15 @@ impl<T: Slot> Turbine<T> {
 
 	}
 
+	/// Check if there is a free slot in the RingBuffer
+	///
+	/// This method determines if there is a free slot which the writer can use.
+	/// To do this, it must find the minimum cursor value and mask that against
+	/// the size of the RingBuffer.  Once a suitable "until" value has been found,
+	/// this is cached to help reduce loading Atomics and invalidating caches.
+	///
+	/// Returns true if there is a free slot, false otherwise.
 	fn can_write(&mut self) -> bool {
-		/*
-		debug!("Until is: {} ({})  --  Current is: {} ({})  -- {}",
-							self.until, self.until & self.mask,
-							self.current_pos, self.current_pos & self.mask,
-							self.until == (self.current_pos & self.mask));
-		*/
 		debug!("{} == {} ({} & {})  -- {}", self.until, self.current_pos & self.mask, self.current_pos, self.mask, self.until == (self.current_pos & self.mask));
 
 		if self.until == (self.current_pos & self.mask) {
