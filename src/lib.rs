@@ -59,7 +59,7 @@ pub use waitstrategy::{WaitStrategy, BusyWait};
 mod eventprocessor;
 mod waitstrategy;
 mod paddedatomics;
-mod atomicu64;
+mod atomicnum;
 mod ringbuffer;
 
 

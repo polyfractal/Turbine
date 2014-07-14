@@ -3,21 +3,21 @@
 
 use std::sync::atomics::{SeqCst, Release, Acquire};
 use std::fmt::{Formatter, Result, Show};
-use atomicu64::AtomicU64;
+use atomicnum::AtomicNum;
 
 //------------------------- Padded 64 -------------------------//
 
 /// AtomicInt padded with 64 bytes
 pub struct Padded64 {
 	p: [u64, ..7],
-	counter: AtomicU64
+	counter: AtomicNum<u64>
 }
 
 impl Padded64 {
 	pub fn new(x: u64) -> Padded64 {
 		Padded64 {
 			p: [0u64,0u64,0u64,0u64,0u64,0u64,0u64],
-			counter: AtomicU64::new(x)
+			counter: AtomicNum::<u64>::new(x)
 		}
 	}
 	#[inline]

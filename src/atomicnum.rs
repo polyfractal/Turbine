@@ -4,63 +4,34 @@ use std::kinds::marker;
 use std::ty::Unsafe;
 use std::sync::atomics::{Ordering, SeqCst, Release, Acquire, AcqRel, Relaxed};
 
+
 /// An unsigned atomic integer type, supporting basic atomic arithmetic operations
-pub struct AtomicU64 {
-		v: Unsafe<u64>,
+pub struct AtomicNum<T> {
+		v: Unsafe<T>,
 		nocopy: marker::NoCopy
 }
 
-
-/*
-pub enum Ordering {
-		/// No ordering constraints, only atomic operations
-		Relaxed,
-		/// When coupled with a store, all previous writes become visible
-		/// to another thread that performs a load with `Acquire` ordering
-		/// on the same value
-		Release,
-		/// When coupled with a load, all subsequent loads will see data
-		/// written before a store with `Release` ordering on the same value
-		/// in another thread
-		Acquire,
-		/// When coupled with a load, uses `Acquire` ordering, and with a store
-		/// `Release` ordering
-		AcqRel,
-		/// Like `AcqRel` with the additional guarantee that all threads see all
-		/// sequentially consistent operations in the same order.
-		SeqCst
-}
-*/
-
-/// An `AtomicU64` initialized to `0`
-pub static INIT_ATOMIC_U64 : AtomicU64 = AtomicU64 { v: Unsafe{value: 0,
-																																	marker1: marker::InvariantType},
-																												nocopy: marker::NoCopy };
-
-// NB: Needs to be -1 (0b11111111...) to make fetch_nand work correctly
-static U64_TRUE: u64 = -1;
-
-impl AtomicU64 {
+impl<T: Num> AtomicNum<T> {
 		/// Create a new `AtomicUint`
-		pub fn new(v: u64) -> AtomicU64 {
-				AtomicU64 { v: Unsafe::new(v), nocopy: marker::NoCopy }
+		pub fn new(v: T) -> AtomicNum<T> {
+				AtomicNum { v: Unsafe::new(v), nocopy: marker::NoCopy }
 		}
 
 		/// Load the value
 		#[inline]
-		pub fn load(&self, order: Ordering) -> u64 {
-				unsafe { atomic_load(self.v.get() as *const u64, order) }
+		pub fn load(&self, order: Ordering) -> T {
+				unsafe { atomic_load(self.v.get() as *const T, order) }
 		}
 
 		/// Store the value
 		#[inline]
-		pub fn store(&self, val: u64, order: Ordering) {
+		pub fn store(&self, val: T, order: Ordering) {
 				unsafe { atomic_store(self.v.get(), val, order); }
 		}
 
 		/// Store a value, returning the old value
 		#[inline]
-		pub fn swap(&self, val: u64, order: Ordering) -> u64 {
+		pub fn swap(&self, val: T, order: Ordering) -> T {
 				unsafe { atomic_swap(self.v.get(), val, order) }
 		}
 
@@ -70,7 +41,7 @@ impl AtomicU64 {
 		/// replace the current value with `new`. Return the previous value.
 		/// If the return value is equal to `old` then the value was updated.
 		#[inline]
-		pub fn compare_and_swap(&self, old: u64, new: u64, order: Ordering) -> u64 {
+		pub fn compare_and_swap(&self, old: T, new: T, order: Ordering) -> T {
 				unsafe { atomic_compare_and_swap(self.v.get(), old, new, order) }
 		}
 
@@ -86,7 +57,7 @@ impl AtomicU64 {
 		/// assert_eq!(10, foo.load(SeqCst));
 		/// ```
 		#[inline]
-		pub fn fetch_add(&self, val: u64, order: Ordering) -> u64 {
+		pub fn fetch_add(&self, val: T, order: Ordering) -> T {
 				unsafe { atomic_add(self.v.get(), val, order) }
 		}
 
@@ -102,7 +73,7 @@ impl AtomicU64 {
 		/// assert_eq!(0, foo.load(SeqCst));
 		/// ```
 		#[inline]
-		pub fn fetch_sub(&self, val: u64, order: Ordering) -> u64 {
+		pub fn fetch_sub(&self, val: T, order: Ordering) -> T {
 				unsafe { atomic_sub(self.v.get(), val, order) }
 		}
 
@@ -117,7 +88,7 @@ impl AtomicU64 {
 		/// assert_eq!(0b101101, foo.fetch_and(0b110011, SeqCst));
 		/// assert_eq!(0b100001, foo.load(SeqCst));
 		#[inline]
-		pub fn fetch_and(&self, val: u64, order: Ordering) -> u64 {
+		pub fn fetch_and(&self, val: T, order: Ordering) -> T {
 				unsafe { atomic_and(self.v.get(), val, order) }
 		}
 
@@ -132,7 +103,7 @@ impl AtomicU64 {
 		/// assert_eq!(0b101101, foo.fetch_or(0b110011, SeqCst));
 		/// assert_eq!(0b111111, foo.load(SeqCst));
 		#[inline]
-		pub fn fetch_or(&self, val: u64, order: Ordering) -> u64 {
+		pub fn fetch_or(&self, val: T, order: Ordering) -> T {
 				unsafe { atomic_or(self.v.get(), val, order) }
 		}
 
@@ -147,7 +118,7 @@ impl AtomicU64 {
 		/// assert_eq!(0b101101, foo.fetch_xor(0b110011, SeqCst));
 		/// assert_eq!(0b011110, foo.load(SeqCst));
 		#[inline]
-		pub fn fetch_xor(&self, val: u64, order: Ordering) -> u64 {
+		pub fn fetch_xor(&self, val: T, order: Ordering) -> T {
 				unsafe { atomic_xor(self.v.get(), val, order) }
 		}
 }
@@ -264,15 +235,14 @@ unsafe fn atomic_xor<T>(dst: *mut T, val: T, order: Ordering) -> T {
 }
 
 
-
 #[cfg(test)]
 mod tests {
-	use super::AtomicU64;
+	use super::AtomicNum;
 	use std::sync::atomics::{SeqCst, Release, Acquire, AcqRel, Relaxed};
 
 	#[test]
 	fn test_max_store() {
-		let c = AtomicU64::new(0);
+		let c: AtomicNum<u64> = AtomicNum::new(0);
 		c.store(18446744073709551615, SeqCst);
 		let v = c.load(SeqCst);
 
@@ -281,12 +251,11 @@ mod tests {
 
 	#[test]
 	fn test_max_store_overflow() {
-		let c = AtomicU64::new(0);
+		let c: AtomicNum<u64> = AtomicNum::new(0);
 		c.store(18446744073709551615, SeqCst);
 		c.fetch_add(1, SeqCst);
 		let v = c.load(SeqCst);
 
 		assert!(v == 0);
 	}
-
 }
