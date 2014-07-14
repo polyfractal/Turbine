@@ -274,7 +274,7 @@ mod test {
 		}
 	}
 
-/*
+
 	#[test]
 	fn test_init() {
 		let t: Turbine<TestSlot> = Turbine::new(1024);
@@ -885,7 +885,7 @@ mod test {
 		error!("Turbine: Total time: {}", (end-start) as f32 / 1000000f32);
 		error!("Turbine: ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
 	}
-*/
+
 
 
 	#[test]
