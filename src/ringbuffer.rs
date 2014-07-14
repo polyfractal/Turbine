@@ -8,7 +8,39 @@ macro_rules! is_pow2(
     );
 )
 
+/// A container for data inside the RingBuffer
+///
+/// Slot must be implemented by the user.  A Slot implementation will provide
+/// a generic container which holds data to be placed inside of Turbine.  The
+/// contents of this container are irrelevant to Turbine, it simply needs to
+/// implement the Slot trait.
+///
+/// Slot's must be Sendable since they are passed between tasks.
+///
+/// *Note:* The size of the buffer in memory, allocated immediately upon instantiation
+/// of Turbine, will be `buffer_size * sizeof(YourSlot)`.
 pub trait Slot: Send {
+  /// Create a new Slot
+  ///
+  /// All Slot implementations must provide a new constructor method so that
+  /// Turbine can instantiate the object.  If your Slots do not need any instantiation,
+  /// simply return an empty struct in this method.
+  ///
+  ///##Example
+  ///
+  ///```
+  ///struct TestSlot {
+  /// pub value: int
+  ///}
+  ///
+  ///impl Slot for TestSlot {
+  ///  fn new() -> TestSlot {
+  ///    TestSlot {
+  ///      value: -1
+  ///    }
+  ///  }
+  ///}
+  ///```
 	fn new() -> Self;
 }
 

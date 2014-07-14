@@ -23,6 +23,10 @@ pub trait WaitStrategy {
 	fn wait_for(&self, sequence: u64, ep: &Vec<&Padded64>) -> u64;
 }
 
+/// An implementation of WaitStrategy that busy-spins while waiting
+///
+/// This strategy should have the best perforamnce and keep caches hot, but will chew
+/// CPU while there is no work to be done.
 pub struct BusyWait {
 	ring_size: uint,
   ring_mask: uint
