@@ -44,6 +44,7 @@ extern crate log;
 extern crate sync;
 
 extern crate time;
+extern crate libc;
 
 use sync::Arc;
 use eventprocessor::EventProcessor;
@@ -241,7 +242,11 @@ mod test {
 	use std::sync::Future;
 	use time::precise_time_ns;
 	use std::comm::TryRecvError;
-	use std::rand;
+	use std::rand::{task_rng, Rng};
+
+	use libc::funcs::posix88::unistd::usleep;
+	use std::io::File;
+	use std::num::abs;
 
 	//use TestSlot;
 
@@ -257,7 +262,19 @@ mod test {
 		}
 	}
 
+	struct TestSlotU64 {
+		pub value: u64
+	}
 
+	impl Slot for TestSlotU64 {
+		fn new() -> TestSlotU64 {
+			TestSlotU64 {
+				value: -1	// Negative value here helps catch bugs since counts will be wrong
+			}
+		}
+	}
+
+/*
 	#[test]
 	fn test_init() {
 		let t: Turbine<TestSlot> = Turbine::new(1024);
@@ -622,8 +639,9 @@ mod test {
 		let mut future = Future::spawn(proc() {
 			let mut counter = 0i;
 			let mut last = -1i;
+			let mut rng = task_rng();
 			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-				let sleep_time = rand::random::<(u8)>() as u64;
+				let sleep_time = rng.gen_range(0u, 100) as u64;
 				debug!("												SLEEPING {}", sleep_time);
 				timer::sleep(sleep_time);
 				debug!("												DONE SLEEPING");
@@ -662,7 +680,7 @@ mod test {
 		//
 	}
 
-/*
+
 	#[test]
 	fn test_two_readers() {
 		let mut t: Turbine<TestSlot> = Turbine::new(1024);
@@ -718,8 +736,6 @@ mod test {
 			});
 			tx2.send(1);
 		});
-
-		assert!(t.current_pos == 0);
 
 		for i in range(0u64, 1200) {
 			let mut x: TestSlot = Slot::new();
@@ -791,7 +807,6 @@ mod test {
 			tx2.send(1);
 		});
 
-		assert!(t.current_pos == 0);
 
 		for i in range(0i, 1200i) {
 			let mut x: TestSlot = Slot::new();
@@ -804,7 +819,180 @@ mod test {
 		rx2.recv_opt();
 
 	}
-	*/
+
+	#[test]
+	fn bench_chan_10m() {
+
+		let (tx_bench, rx_bench): (Sender<int>, Receiver<int>) = channel();
 
 
+		let mut future = Future::spawn(proc() {
+			for _ in range(0i, 10000000)  {
+				tx_bench.send(1);
+			}
+
+		});
+
+		let start = precise_time_ns();
+		let mut counter = 0;
+		for i in range(0i, 10000000) {
+			counter += rx_bench.recv();
+		}
+		let end = precise_time_ns();
+
+		future.get();
+
+		error!("Channel: Total time: {}", (end-start) as f32 / 1000000f32);
+		error!("Channel: ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
+	}
+
+	#[test]
+	fn bench_turbine_10m() {
+		let mut t: Turbine<TestSlot> = Turbine::new(1048576);
+		let e1 = t.ep_new().unwrap();
+
+		let event_processor = t.ep_finalize(e1);
+		let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+
+		let mut future = Future::spawn(proc() {
+			let mut counter = 0;
+			event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+				for _ in data.iter() {
+					counter += data[0].value;
+				}
+
+				if counter == 10000000 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx.send(1);
+		});
+
+		let start = precise_time_ns();
+		for i in range(0i, 10000000) {
+			let mut s: TestSlot = Slot::new();
+			s.value = 1;
+			t.write(s);
+		}
+
+		rx.recv_opt();
+		let end = precise_time_ns();
+
+
+		error!("Turbine: Total time: {}", (end-start) as f32 / 1000000f32);
+		error!("Turbine: ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
+	}
+*/
+
+
+	#[test]
+	fn bench_turbine_latency() {
+		let path = Path::new("turbine_latency.csv");
+		let mut file = match File::create(&path) {
+				Err(why) => fail!("couldn't create file: {}", why.desc),
+				Ok(file) => file
+		};
+
+		let mut t: Turbine<TestSlotU64> = Turbine::new(1048576);
+		let e1 = t.ep_new().unwrap();
+
+		let event_processor = t.ep_finalize(e1);
+		let (tx, rx): (Sender<Vec<u64>>, Receiver<Vec<u64>>) = channel();
+
+		let mut future = Future::spawn(proc() {
+			let mut counter: int = 0;
+			let mut latencies = Vec::with_capacity(100000);
+
+			event_processor.start::<BusyWait>(|data: &[TestSlotU64]| -> Result<(),()> {
+				for d in data.iter() {
+					let end = precise_time_ns();
+					let total = abs((end - d.value) as i64) as u64;
+					latencies.push(total);
+
+					//error!("{}, {}, {}", d.value, end, total);
+					counter += 1;
+				}
+
+				if counter == 100000 {
+						return Err(());
+				} else {
+					return Ok(());
+				}
+
+			});
+			tx.send(latencies);
+		});
+
+		for i in range(0i, 100000) {
+			let mut s: TestSlotU64 = Slot::new();
+			s.value = precise_time_ns();
+			t.write(s);
+
+			unsafe { usleep(10); }	//sleep for 10 microseconds
+		}
+
+		let latencies = match rx.recv_opt() {
+			Ok(l) => l,
+			Err(_) => fail!("No latencies were returned!")
+		};
+
+
+		for l in latencies.iter() {
+			match file.write_line(l.to_str().as_slice()) {
+        Err(why) => {
+            fail!("couldn't write to file: {}", why.desc)
+        },
+        Ok(_) => {}
+    	}
+		}
+
+	}
+
+
+	#[test]
+	fn bench_chan_latency() {
+		let path = Path::new("chan_latency.csv");
+		let mut file = match File::create(&path) {
+				Err(why) => fail!("couldn't create file: {}", why.desc),
+				Ok(file) => file
+		};
+
+		let (tx_bench, rx_bench): (Sender<u64>, Receiver<u64>) = channel();
+
+
+		let mut future = Future::spawn(proc() {
+			for _ in range(0i, 100000)  {
+				tx_bench.send(precise_time_ns());
+				unsafe { usleep(10); }	//sleep for 10 microseconds
+			}
+
+		});
+
+		let mut counter: int = 0;
+		let mut latencies = Vec::with_capacity(100000);
+
+		for i in range(0i, 100000) {
+			counter += 1;
+			let end = precise_time_ns();
+			let start = rx_bench.recv();
+			let total = abs((end - start) as i64) as u64;	// because ticks can go backwards between different cores
+			latencies.push(total);
+			//error!("{}, {}, {}", start, end, total);
+		}
+
+		for l in latencies.iter() {
+			match file.write_line(l.to_str().as_slice()) {
+				Err(why) => {
+						fail!("couldn't write to file: {}", why.desc)
+				},
+				Ok(_) => {}
+			}
+		}
+
+		future.get();
+
+	}
 }
