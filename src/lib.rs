@@ -34,17 +34,11 @@
 
 #[phase(syntax, link)]
 
-
-
-
-
-
-
 extern crate log;
 extern crate sync;
 
-extern crate time;
-extern crate libc;
+#[cfg(test)] extern crate libc;
+#[cfg(test)] extern crate time;
 
 use sync::Arc;
 use eventprocessor::EventProcessor;
@@ -364,32 +358,8 @@ impl<T: Slot> Turbine<T> {
 				}
 			}
 
-			/*
-			self.until = if (self.current_pos & self.mask) > (min_cursor & self.mask) {
-				// 1025					1024
-				// current_pos & mask: 1, min_cursor & mask: 0
-				// avail = (1024 - 988) + 795
-				debug!("UNTIL DECISION: Current > Min");
-				debug!("{} + ({} - {}) + {}", self.current_pos, self.size, (self.current_pos & self.mask), (min_cursor & self.mask));
-				self.current_pos + (self.size as u64 - (self.current_pos & self.mask)) + (min_cursor & self.mask)
-			} else if (self.current_pos & self.mask) == (min_cursor & self.mask) {
-				debug!("UNTIL DECISION: Current == Min");
-				self.current_pos + (self.until + 1) & self.mask
-			} else {
-				// current already wrapped
-				// current_pos & mask: 0, min_cursor & mask: 1
-				// avail = (1024 - 1) + 0 == 234
-				debug!("UNTIL DECISION: Current < Min");
-				debug!("{} + ({} - {}) + {}", self.current_pos, self.size, (min_cursor & self.mask), self.current_pos & self.mask);
-
-				self.current_pos + (self.size as u64 - (min_cursor & self.mask)) + (self.current_pos & self.mask)
-				//self.current_pos + (min_cursor & self.mask)
-			};
-			*/
-
 			self.until = min_cursor & self.mask;
 
-			//self.until = self.current_pos + (min_cursor & self.mask);
 			debug!("current_pos: {}, min_cursor: {}, new until: {}", self.current_pos, min_cursor, self.until);
 			debug!("current_pos & mask: {}, min_cursor & mask: {}", (self.current_pos & self.mask), (min_cursor & self.mask));
 		}
