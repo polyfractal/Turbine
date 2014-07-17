@@ -1,6 +1,5 @@
 
 use std::ty::Unsafe;
-use std::fmt;
 
 macro_rules! is_pow2(
     ($x:ident) => (
@@ -45,8 +44,7 @@ pub trait Slot: Send {
 }
 
 pub struct RingBuffer<T> {
-	entries: Unsafe<Vec<T>>,
-	mask: uint
+	entries: Unsafe<Vec<T>>
 }
 
 impl<T: Slot + Send> RingBuffer<T> {
@@ -55,12 +53,11 @@ impl<T: Slot + Send> RingBuffer<T> {
     let entries: Unsafe<Vec<T>> = match size {
 			0 => fail!("Buffer Size must be greater than zero."),
 			s if !(is_pow2!(s)) => fail!("Buffer Size must be a power of two"),
-			_ => unsafe { Unsafe::new(Vec::from_fn(size, |_| Slot::new())) }
+			_ => Unsafe::new(Vec::from_fn(size, |_| Slot::new()))
 		};
 
 		RingBuffer::<T> {
-			entries: entries,
-			mask: size - 1
+			entries: entries
 		}
 	}
 
@@ -72,14 +69,14 @@ impl<T: Slot + Send> RingBuffer<T> {
   // Unsafe because we have no guarantees the caller won't invalidate this slot
   pub unsafe fn get(&self, from: uint, size: uint) -> &[T] {
     debug!("              RingBuffer get({}, {})", from, size);
-    let v: *mut Vec<T> = unsafe { self.entries.get() };
-    unsafe { (*v).slice(from, size) }
+    let v: *mut Vec<T> = self.entries.get();
+    (*v).slice(from, size)
   }
 
   // Unsafe because we have no guarantees the caller won't invalidate this slot
   pub unsafe fn write(&self, position: uint, data: T) {
-    let v: *mut Vec<T> = unsafe { self.entries.get() };
-    let slot = unsafe { (*v).get_mut(position) };
+    let v: *mut Vec<T> = self.entries.get();
+    let slot = (*v).get_mut(position);
     *slot = data;
   }
 }
@@ -102,18 +99,18 @@ mod tests {
 
 	#[test]
 	fn new_ringbuf() {
-		let r: RingBuffer<TestSlot> = RingBuffer::new(2);
+		let _: RingBuffer<TestSlot> = RingBuffer::new(2);
 	}
 
   #[test]
   #[should_fail]
   fn new_ringbuff_non_power_of_two() {
-    let r: RingBuffer<TestSlot> = RingBuffer::new(5);
+    let _: RingBuffer<TestSlot> = RingBuffer::new(5);
   }
 
   #[test]
   #[should_fail]
   fn new_ringbuff_zero() {
-    let r: RingBuffer<TestSlot> = RingBuffer::new(0);
+    let _: RingBuffer<TestSlot> = RingBuffer::new(0);
   }
 }

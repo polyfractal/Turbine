@@ -41,14 +41,13 @@ extern crate sync;
 #[cfg(test)] extern crate time;
 
 use sync::Arc;
-use eventprocessor::EventProcessor;
-use paddedatomics::Padded64;
-use ringbuffer::{RingBuffer};
-use std::cmp::{min, max};
-use std::fmt;
 
-pub use ringbuffer::Slot;
+use std::cmp::{min};
+
+pub use ringbuffer::{RingBuffer, Slot};
 pub use waitstrategy::{WaitStrategy, BusyWait};
+pub use eventprocessor::EventProcessor;
+#[doc(hidden)] pub use paddedatomics::Padded64;
 
 mod eventprocessor;
 mod waitstrategy;
@@ -88,7 +87,7 @@ impl<T: Slot> Turbine<T> {
 	/// ```
 	///
 	pub fn new(ring_size: uint) -> Turbine<T> {
-		let mut epb = Vec::with_capacity(8);
+		let epb = Vec::with_capacity(8);
 
 		Turbine::<T> {
 			finalized: false,
@@ -377,11 +376,8 @@ mod test {
 	use Slot;
 	use waitstrategy::BusyWait;
 	use std::io::timer;
-	use std::fmt;
-	use std::task::{TaskBuilder};
 	use std::sync::Future;
 	use time::precise_time_ns;
-	use std::comm::TryRecvError;
 	use std::rand::{task_rng, Rng};
 
 	use libc::funcs::posix88::unistd::usleep;
@@ -1044,7 +1040,7 @@ mod test {
 
 		let mut future = Future::spawn(proc() {
 			let mut counter: int = 0;
-			let mut latencies = Vec::with_capacity(100000);
+			let mut latencies = Vec::with_capacity(1000000);
 
 			event_processor.start::<BusyWait>(|data: &[TestSlotU64]| -> Result<(),()> {
 				for d in data.iter() {
@@ -1056,7 +1052,7 @@ mod test {
 					counter += 1;
 				}
 
-				if counter == 100000 {
+				if counter == 1000000 {
 						return Err(());
 				} else {
 					return Ok(());
@@ -1066,7 +1062,7 @@ mod test {
 			tx.send(latencies);
 		});
 
-		for i in range(0i, 100000) {
+		for i in range(0i, 1000000) {
 			let mut s: TestSlotU64 = Slot::new();
 			s.value = precise_time_ns();
 			t.write(s);
@@ -1104,17 +1100,18 @@ mod test {
 
 
 		let mut future = Future::spawn(proc() {
-			for _ in range(0i, 100000)  {
-				tx_bench.send(precise_time_ns());
+			for _ in range(0i, 1000000)  {
+				let x = precise_time_ns();
+				tx_bench.send(x);
 				unsafe { usleep(10); }	//sleep for 10 microseconds
 			}
 
 		});
 
 		let mut counter: int = 0;
-		let mut latencies = Vec::with_capacity(100000);
+		let mut latencies = Vec::with_capacity(1000000);
 
-		for i in range(0i, 100000) {
+		for i in range(0i, 1000000) {
 			counter += 1;
 			let end = precise_time_ns();
 			let start = rx_bench.recv();

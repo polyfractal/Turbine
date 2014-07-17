@@ -1,7 +1,6 @@
 
-use eventprocessor::EventProcessor;
 use paddedatomics::Padded64;
-use std::cmp::{min, max};
+use std::cmp::{min};
 
 /// A trait which provides a unified interface to various waiting strategies
 pub trait WaitStrategy {
@@ -28,8 +27,7 @@ pub trait WaitStrategy {
 /// This strategy should have the best perforamnce and keep caches hot, but will chew
 /// CPU while there is no work to be done.
 pub struct BusyWait {
-	ring_size: uint,
-  ring_mask: uint
+	ring_size: uint
 }
 
 impl BusyWait {
@@ -56,8 +54,7 @@ impl BusyWait {
 impl WaitStrategy for BusyWait {
 	fn new(ring_size: uint) -> BusyWait {
 		BusyWait {
-			ring_size: ring_size,
-			ring_mask: ring_size - 1
+			ring_size: ring_size
 		}
 	}
 

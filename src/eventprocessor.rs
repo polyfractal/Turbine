@@ -1,12 +1,9 @@
 
 
 use sync::Arc;
-use std::sync::atomics::{AtomicInt, SeqCst, Release, Acquire};
 use waitstrategy::{WaitStrategy};
 use paddedatomics::Padded64;
 use ringbuffer::{RingBuffer, Slot};
-use std::fmt::{Show};
-use std::io::timer;
 
 
 pub struct EventProcessor<T> {
@@ -49,7 +46,7 @@ impl<T: Slot> EventProcessor<T> {
 		loop {
 			debug!("              Current: {}, waiting on: {}", internal_cursor, internal_cursor);
 
-			let mut available = wait_strategy.wait_for(internal_cursor, &deps);
+			let available = wait_strategy.wait_for(internal_cursor, &deps);
 			debug!("							Available: {}", available);
 
 			let from = (internal_cursor & mask) as uint;
@@ -76,14 +73,14 @@ impl<T: Slot> EventProcessor<T> {
 			// before we increment our cursor.  Since the slice is borrowed out, we
 			// know it will be returned after the function call ends.  The slice will
 			// be dropped after the unsafe block, and *then* we increment our cursor
-			let status = unsafe {
+			let mut status = unsafe {
 				let data: &[T] = self.ring.get(from, to);
 				f(data)
 			};
 
 			if rollover.val0() == true {
 				debug!("ROlLOVER GET");
-				let status = unsafe {
+				status = unsafe {
 					let data: &[T] = self.ring.get(0, rollover.val1());
 					f(data)
 				};
