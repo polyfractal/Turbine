@@ -56,7 +56,7 @@ Perhaps more interesting is latency.  Below is a log-log plot of latency (in nan
 
 ![](turbine1.png)
 
-As you can see, Turbine averages around 250ns per message, while channels average around 16,000ns (16 microseconds).  Because log-log plots are sometimes hard to interpret, here is a log-linear plot.  THe x-axis is still logarithmic, but the latency on the y-axis is linear:
+Turbine averages around 250ns per message, while channels average around 16,000ns (16 microseconds).  Because log-log plots are sometimes hard to interpret, here is a log-linear plot.  The x-axis is still logarithmic, but the latency on the y-axis is linear:
 
 ![](turbine2.png)
 
