@@ -22,6 +22,20 @@ That said, Turbine does not replace channels for a variety of reasons.
 ### Usage
 
 ```rust
+// This struct will be the container for your data
+struct TestSlot {
+    pub value: int
+}
+
+// Your container must implement the Slot trait
+impl Slot for TestSlot {
+    fn new() -> TestSlot {
+        TestSlot {
+            value: 0
+        }
+    }
+}
+
 // Initialize a new Turbine
 let mut turbine: Turbine<TestSlot> = Turbine::new(1024);
 
