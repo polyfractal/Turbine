@@ -20,3 +20,5 @@
 /build/
 /.rust/
 rusti.sh
+turbine.iml
+.idea
