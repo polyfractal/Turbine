@@ -30,7 +30,46 @@
 //! - Channels are more efficient if you have low or inconsistent communication requirements
 //! - Channels can be MPSC (multi-producer, single-consumer) while Turbine is SPMC
 //! - Turbine requires significant memory overhead to initialize (the ring buffer)
-
+//!
+//!```
+//!   // This struct will be the container for your data
+//!   struct TestSlot {
+//!       pub value: int
+//!   }
+//!
+//!   // Your container must implement the Slot trait
+//!   impl Slot for TestSlot {
+//!       fn new() -> TestSlot {
+//!           TestSlot {
+//!               value: 0
+//!           }
+//!       }
+//!   }
+//!
+//!   // Initialize a new Turbine
+//!   let mut turbine: Turbine<TestSlot> = Turbine::new(1024);
+//!
+//!   // Create an EventProcessorBulder
+//!   let epBuilder = match turbine.ep_new() {
+//!       Ok(ep) => ep,
+//!   	Err(_) => fail!("Failed to create new EventProcessor!")
+//!   };
+//!
+//!   // Finalize and retrieve an EventProcessor
+//!   let event_processor = turbine.ep_finalize(epBuilder);
+//!
+//!   // Spawn a new thread, wait for data to arrive
+//!   spawn(proc() {
+//!   	event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+//!   	    // ... process work here ... //
+//!   	});
+//!   });
+//!
+//!   // Write data into Turbine
+//!   let mut x: TestSlot = Slot::new();
+//!   x.value = 19;
+//!   turbine.write(x);
+//!   ```
 
 #[phase(syntax, link)]
 
