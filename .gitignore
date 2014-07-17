@@ -14,9 +14,9 @@
 /bin/main
 /bin/test-internal
 /bin/test-external
+/bin/*
 /doc/
 /target/
 /build/
 /.rust/
 rusti.sh
-
