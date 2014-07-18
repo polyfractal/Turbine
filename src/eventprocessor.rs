@@ -5,7 +5,7 @@ use waitstrategy::{WaitStrategy};
 use paddedatomics::Padded64;
 use ringbuffer::{RingBuffer, Slot};
 
-
+/// EventProcessors provide functionality to process and consume data from the ring buffer
 pub struct EventProcessor<T> {
     graph: Arc<Vec<Vec<uint>>>,
     cursors: Arc<Vec<Padded64>>,
@@ -15,6 +15,14 @@ pub struct EventProcessor<T> {
 
 
 impl<T: Slot> EventProcessor<T> {
+
+    /// Instantiate a new EventProcessor.
+    ///
+    /// This accepts several important parameters and is for internal use only.
+    /// - ring: an instance of the ring buffer
+    /// - graph: a dependency graph, showing how all the EPs relate to eachother.
+    /// - cursors: a vector of Padded64 atomics which act as cursors into the ring buffer
+    /// - token: the index in the graph which represents this EP
     pub fn new(ring: Arc<RingBuffer<T>>, graph: Arc<Vec<Vec<uint>>>, cursors: Arc<Vec<Padded64>>, token: uint) -> EventProcessor<T> {
         EventProcessor::<T> {
             graph: graph,
@@ -24,7 +32,31 @@ impl<T: Slot> EventProcessor<T> {
         }
     }
 
-
+    /// Begin waiting for data to arrive from the ring buffer.
+    ///
+    /// This method is the only "public" method in EventProcessor.rs.
+    /// This method accepts a closure as its only parameter.  Once data is received (e.g. all dependencies have been
+    /// satisfied and the data is ready to be consumed), this closure is called.  A slice from the ring buffer is passed
+    /// to the closure.
+    ///
+    /// The slice may containe one or more pieces of data to process (this batching adds a lot of performance to Turbine).
+    /// The user-code running inside the closure must be capable of handling multiple pieces of data.
+    ///
+    /// Upon completion of processing the data, the closure must return a Result signaling if it wants the event processor
+    /// to continue running, or exit.  A Result of Ok(()) will tell the EP to continue running.  A Result of Err(()) will
+    /// shut down the EP.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    ///spawn(proc() {
+    ///     event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+    ///         assert!(data.len() == 1);
+    ///         assert!(data[0].value == 19);
+    ///         return Ok(());
+    ///     });
+    ///});
+    ///```
     pub fn start<W: WaitStrategy>(&self, f: |data: &[T]| -> Result<(),()>) {
         let capacity = self.ring.get_capacity();
 
