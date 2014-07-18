@@ -44,13 +44,13 @@ impl Slot for TestSlot {
 let mut turbine: Turbine<TestSlot> = Turbine::new(1024);
 
 // Create an EventProcessorBulder
-let epBuilder = match turbine.ep_new() {
+let ep_builder = match turbine.ep_new() {
     Ok(ep) => ep,
 	Err(_) => fail!("Failed to create new EventProcessor!")
 };
 
 // Finalize and retrieve an EventProcessor
-let event_processor = turbine.ep_finalize(epBuilder);
+let event_processor = turbine.ep_finalize(ep_builder);
 
 // Spawn a new thread, wait for data to arrive
 spawn(proc() {
