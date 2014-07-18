@@ -65,6 +65,39 @@ x.value = 19;
 turbine.write(x);
 ```
 
+### High-level Overview of Implementation
+
+There are three moving parts in Turbine: the Turbine object, the event processors, and the ring buffer.
+
+#### Main Turbine Object
+The main turbine object is used to A) build the dependency graph between event processors, B) instantiate these event
+processors and C) write data into the buffer.
+
+The main object also maintains a list of "cursors" -- Atomic Longs that act as index positions into the ring buffer.
+These cursors record the position of the writer and various event processors.  When an event processor is built,
+it is given a copy of these cursors in an Arc<>.  This allows the event processors to update their position
+as well as read the position of dependencies
+
+The main object also owns the memory of the ring buffer, and has exclusive write access.  This means only a single
+task is writing to the buffer and greatly simplifies the logic.
+
+#### Event Processors
+Event processors receive borrowed slices of data from ring buffer, representing batches of work that they can consume.
+These slices are borrowed and immutable, which means the EP can never invalidate or nullify data inside the ring buffer.
+Once the EP is done processing, the slice is returned to the ring buffer when the closure drops.
+
+Event processors can be daisy-chained in a dependency graph, which means that any particular EP will not receive a work
+unit until all of its dependencies have already processed that piece of work.  The dependency chain may be arbitrarily
+complex, as long as there are no cycles.
+
+#### Ring Buffer
+The ring buffer holds a pre-allocated vector of Slots, which the user defines as a custom container for application data.
+The ring buffer is actually rather dumb: it only knows how to read and write into the datastructure.  It has no concept
+of rollover, or even safe access patterns.  It relies entirely on external code to guarantee safe access to the underlying
+data.
+
+For this reason, many of the methods that it exposes are unsafe and are wrapped by the main object and the event processors.
+
 ### Performance
 Turbine has not been tuned or optimized yet, and there are still a lot of ugly debug lines laying around.  That said, it's already pretty darn fast.
 
