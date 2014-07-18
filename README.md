@@ -84,6 +84,7 @@ There is definitely tuning left to be done.  The theoretical minimum latency on 
 
 ### Todo
 
+- Switch from Rust-Empty to Cargo
 - Performance tuning (in particular, cache invalidations)
 - Remove the need to allocate a new Slot for each write (e.g. write should return a Slot which can be reused).
 - Reuse existing slots in the buffer
