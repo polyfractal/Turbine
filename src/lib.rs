@@ -1,6 +1,7 @@
-#![crate_id = "turbine#0.1"]
+#![crate_name = "turbine"]
 #![desc = "Turbine - a high-performance, non-locking, inter-task communication library"]
-#![license = "Apache2"]
+#![license = "MIT/ASL2"]
+#![crate_type = "rlib"]
 //#![deny(missing_doc)]
 #![feature(phase)]
 #![feature(macro_rules)]
@@ -73,7 +74,7 @@
 //!   turbine.write(x);
 //!   ```
 
-#[phase(syntax, link)]
+#[phase(plugin, link)]
 
 extern crate log;
 extern crate sync;
@@ -1117,7 +1118,7 @@ mod test {
 
 
         for l in latencies.iter() {
-            match file.write_line(l.to_str().as_slice()) {
+            match file.write_line(l.to_string().as_slice()) {
         Err(why) => {
             fail!("couldn't write to file: {}", why.desc)
         },
@@ -1161,7 +1162,7 @@ mod test {
         }
 
         for l in latencies.iter() {
-            match file.write_line(l.to_str().as_slice()) {
+            match file.write_line(l.to_string().as_slice()) {
                 Err(why) => {
                         fail!("couldn't write to file: {}", why.desc)
                 },
