@@ -1,4 +1,6 @@
-#![crate_id = "turbine"]
+#![crate_id = "turbine#0.1"]
+#![desc = "Turbine - a high-performance, non-locking, inter-task communication library"]
+#![license = "Apache2"]
 //#![deny(missing_doc)]
 #![feature(phase)]
 #![feature(macro_rules)]
