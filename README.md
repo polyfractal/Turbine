@@ -19,6 +19,10 @@ That said, Turbine does not replace channels for a variety of reasons.
 - Channels can be MPSC (multi-producer, single-consumer) while Turbine is SPMC
 - Turbine requires significant memory overhead to initialize (the ring buffer)
 
+### Documentation
+
+[API docs can be found here.](http://polyfractal.github.io/Turbine/turbine/)
+
 ### Usage
 
 ```rust
@@ -77,3 +81,14 @@ Turbine averages around 250ns per message, while channels average around 16,000n
 As you can see, there is a rather large difference between the two.
 
 There is definitely tuning left to be done.  The theoretical minimum latency on my test hardware is ~40ns, based on the latency of inter-core communication.  Which means the current performance is about 4x slower than it could be...plenty of tuning to do!
+
+### Todo
+
+- Performance tuning (in particular, cache invalidations)
+- Remove the need to allocate a new Slot for each write (e.g. write should return a Slot which can be reused).
+- Reuse existing slots in the buffer
+- Investigate using an "abstract class" structure instead of closures (see [here for possible implementation](http://www.reddit.com/r/rust/comments/29ywdu/what_you_dont_love_about_rust/cipypom))
+- More wait strategies
+- Configurable writer wait strategy (hardcoded busy-wait right now)
+- Multi-writer?
+- Continue work on "wrap-around" counter instead of monotonic?
