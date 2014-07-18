@@ -34,7 +34,7 @@
 //! - Channels can be MPSC (multi-producer, single-consumer) while Turbine is SPMC
 //! - Turbine requires significant memory overhead to initialize (the ring buffer)
 //!
-//!```
+//! ```
 //!   // This struct will be the container for your data
 //!   struct TestSlot {
 //!       pub value: int
@@ -72,7 +72,7 @@
 //!   let mut x: TestSlot = Slot::new();
 //!   x.value = 19;
 //!   turbine.write(x);
-//!   ```
+//! ```
 
 #[phase(plugin, link)]
 

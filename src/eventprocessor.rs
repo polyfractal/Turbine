@@ -48,7 +48,7 @@ impl<T: Slot> EventProcessor<T> {
     ///
     /// ## Example
     ///
-    /// ```
+    ///```
     ///spawn(proc() {
     ///     event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
     ///         assert!(data.len() == 1);
