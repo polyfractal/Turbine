@@ -77,6 +77,7 @@ impl<T: Slot + Send> RingBuffer<T> {
     pub unsafe fn write(&self, position: uint, data: T) {
         let v: *mut Vec<T> = self.entries.get();
         let slot = (*v).get_mut(position);
+        drop(&*slot);
         *slot = data;
     }
 }
