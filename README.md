@@ -132,5 +132,6 @@ There is definitely tuning left to be done.  The theoretical minimum latency on 
 - Investigate using an "abstract class" structure instead of closures (see [here for possible implementation](http://www.reddit.com/r/rust/comments/29ywdu/what_you_dont_love_about_rust/cipypom))
 - More wait strategies
 - Configurable writer wait strategy (hardcoded busy-wait right now)
+- More tests.  In particular, multi-EP dependency graphs have not really been validated
 - Multi-writer?
 - Continue work on "wrap-around" counter instead of monotonic?
