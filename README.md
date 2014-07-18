@@ -81,6 +81,14 @@ as well as read the position of dependencies
 The main object also owns the memory of the ring buffer, and has exclusive write access.  This means only a single
 task is writing to the buffer and greatly simplifies the logic.
 
+The cursors are maintained as U64s.  There is another (original) branch that tried to build Turbine with a small int
+and handle ring buffer rollovers so that the library could operate for eternity without need for restart.  This proved
+difficult.  So for now, monotonically u64s are being used as absolute indices.
+
+The max value of a u64 is `18,446,744,073,709,551,615`.  If we assume that Turbine can write 1 billion messages a second
+(for reference, it maxes out at 30m on my laptop) it would take 584.555 years before the u64 would overflow.  This is a
+time-line I am willing to accept for now :)
+
 #### Event Processors
 Event processors receive borrowed slices of data from ring buffer, representing batches of work that they can consume.
 These slices are borrowed and immutable, which means the EP can never invalidate or nullify data inside the ring buffer.
