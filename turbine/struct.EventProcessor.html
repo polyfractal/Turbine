@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="The turbine library documentation.">
+
+    <title>turbine::EventProcessor - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body>
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='index.html'>turbine</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.BusyWait.html'>BusyWait</a><a class='struct current' href='struct.EventProcessor.html'>EventProcessor</a><a class='struct ' href='struct.Padded64.html'>Padded64</a><a class='struct ' href='struct.RingBuffer.html'>RingBuffer</a><a class='struct ' href='struct.Turbine.html'>Turbine</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.Slot.html'>Slot</a><a class='trait ' href='trait.WaitStrategy.html'>WaitStrategy</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'>Struct <a href='index.html'>turbine</a>::<a class='struct' href=''>EventProcessor</a><span class='out-of-band'><a id='src-25' href='../src/turbine/src/eventprocessor.rs.html#9-14'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct EventProcessor&lt;T&gt; {
+    // some fields omitted
+}</pre><div class='docblock'><p>EventProcessors provide functionality to process and consume data from the ring buffer</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;T: <a class='trait' href='../turbine/trait.Slot.html' title='turbine::Slot'>Slot</a>&gt; <a class='struct' href='../turbine/struct.EventProcessor.html' title='turbine::EventProcessor'>EventProcessor</a>&lt;T&gt;</code></h3><div class='impl-methods'><h4 id='method.new' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new' class='fnname'>new</a>(ring: <a class='struct' href='http://doc.rust-lang.org/alloc/arc/struct.Arc.html' title='alloc::arc::Arc'>Arc</a>&lt;<a class='struct' href='../turbine/struct.RingBuffer.html' title='turbine::RingBuffer'>RingBuffer</a>&lt;T&gt;&gt;, graph: <a class='struct' href='http://doc.rust-lang.org/alloc/arc/struct.Arc.html' title='alloc::arc::Arc'>Arc</a>&lt;<a class='struct' href='http://doc.rust-lang.org/master/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='http://doc.rust-lang.org/master/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>&gt;&gt;&gt;, cursors: <a class='struct' href='http://doc.rust-lang.org/alloc/arc/struct.Arc.html' title='alloc::arc::Arc'>Arc</a>&lt;<a class='struct' href='http://doc.rust-lang.org/master/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../turbine/struct.Padded64.html' title='turbine::Padded64'>Padded64</a>&gt;&gt;, token: <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>) -&gt; <a class='struct' href='../turbine/struct.EventProcessor.html' title='turbine::EventProcessor'>EventProcessor</a>&lt;T&gt;</code></h4>
+<div class='docblock'><p>Instantiate a new EventProcessor.</p>
+
+<p>This accepts several important parameters and is for internal use only.
+- ring: an instance of the ring buffer
+- graph: a dependency graph, showing how all the EPs relate to eachother.
+- cursors: a vector of Padded64 atomics which act as cursors into the ring buffer
+- token: the index in the graph which represents this EP</p>
+</div><h4 id='method.start' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.start' class='fnname'>start</a>&lt;W: <a class='trait' href='../turbine/trait.WaitStrategy.html' title='turbine::WaitStrategy'>WaitStrategy</a>&gt;(&amp;self, f: |data: &amp;<a href='http://doc.rust-lang.org/master/std/primitive.slice.html'>[T]</a>| -&gt; <a class='type' href='http://doc.rust-lang.org/master/core/result/type.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>, <a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>&gt;)</code></h4>
+<div class='docblock'><p>Begin waiting for data to arrive from the ring buffer.</p>
+
+<p>This method is the only &quot;public&quot; method in EventProcessor.rs.
+ This method accepts a closure as its only parameter.  Once data is received (e.g. all dependencies have been
+ satisfied and the data is ready to be consumed), this closure is called.  A slice from the ring buffer is passed
+ to the closure.</p>
+
+<p>The slice may containe one or more pieces of data to process (this batching adds a lot of performance to Turbine).
+ The user-code running inside the closure must be capable of handling multiple pieces of data.</p>
+
+<p>Upon completion of processing the data, the closure must return a Result signaling if it wants the event processor
+ to continue running, or exit.  A Result of Ok(()) will tell the EP to continue running.  A Result of Err(()) will
+ shut down the EP.</p>
+
+<p>## Example</p>
+<pre class='rust '>
+<span class='ident'>spawn</span>(<span class='kw'>proc</span>() {
+     <span class='ident'>event_processor</span>.<span class='ident'>start</span>::<span class='op'>&lt;</span><span class='ident'>BusyWait</span><span class='op'>&gt;</span>(<span class='op'>|</span><span class='ident'>data</span>: <span class='kw-2'>&amp;</span>[<span class='ident'>TestSlot</span>]<span class='op'>|</span> <span class='op'>-&gt;</span> <span class='prelude-ty'>Result</span><span class='op'>&lt;</span>(),()<span class='op'>&gt;</span> {
+         <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>data</span>.<span class='ident'>len</span>() <span class='op'>==</span> <span class='number'>1</span>);
+         <span class='macro'>assert</span><span class='macro'>!</span>(<span class='ident'>data</span>[<span class='number'>0</span>].<span class='ident'>value</span> <span class='op'>==</span> <span class='number'>19</span>);
+         <span class='kw'>return</span> <span class='prelude-val'>Ok</span>(());
+     });
+});
+</pre>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code> (or <code>str</code>), <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "turbine";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script async src="../search-index.js"></script>
+</body>
+</html>

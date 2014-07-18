@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="The turbine library documentation.">
+
+    <title>turbine::Turbine - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body>
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='index.html'>turbine</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.BusyWait.html'>BusyWait</a><a class='struct ' href='struct.EventProcessor.html'>EventProcessor</a><a class='struct ' href='struct.Padded64.html'>Padded64</a><a class='struct ' href='struct.RingBuffer.html'>RingBuffer</a><a class='struct current' href='struct.Turbine.html'>Turbine</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.Slot.html'>Slot</a><a class='trait ' href='trait.WaitStrategy.html'>WaitStrategy</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'>Struct <a href='index.html'>turbine</a>::<a class='struct' href=''>Turbine</a><span class='out-of-band'><a id='src-3725' href='../src/turbine/src/lib.rs.html#101-111'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Turbine&lt;T&gt; {
+    // some fields omitted
+}</pre><div class='docblock'><p>The main Turbine structure, which controls the operation of this library.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;T: <a class='trait' href='../turbine/trait.Slot.html' title='turbine::Slot'>Slot</a>&gt; <a class='struct' href='../turbine/struct.Turbine.html' title='turbine::Turbine'>Turbine</a>&lt;T&gt;</code></h3><div class='impl-methods'><h4 id='method.new' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new' class='fnname'>new</a>(ring_size: <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>) -&gt; <a class='struct' href='../turbine/struct.Turbine.html' title='turbine::Turbine'>Turbine</a>&lt;T&gt;</code></h4>
+<div class='docblock'><p>Create a new Turbine object with a buffer size of <code>ring_size</code>.  The buffer
+capacity is immediately allocated for performance reasons - there is no lazy
+loading.  Turbine is instantiated with a type parameter corresponding to your
+custom Slot implementation.  This type will populate all the locations in the
+buffer.  See the documentation for <code>Slot</code> for more details.</p>
+
+<p>The buffer size <strong>must</strong> be a power of two.</p>
+
+<h1 id="example" class='section-header'><a
+                           href="#example">Example</a></h1><pre class='rust '>
+<span class='kw'>fn</span> <span class='ident'>init_turbine</span>() {
+  <span class='kw'>let</span> <span class='ident'>t</span>: <span class='ident'>Turbine</span><span class='op'>&lt;</span><span class='ident'>TestSlot</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Turbine</span>::<span class='ident'>new</span>(<span class='number'>1024</span>);
+}
+</pre>
+</div><h4 id='method.ep_new' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.ep_new' class='fnname'>ep_new</a>(&amp;mut self) -&gt; <a class='type' href='http://doc.rust-lang.org/master/core/result/type.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>, <a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Add a new EventProcessor to the dependency graph.</p>
+
+<p>Event processors can be thought of as &quot;consumers&quot; or &quot;readers&quot; of the
+ datastructure.  They are granted read-only access to data that has been
+ placed inside of the buffer. You have may (theoretically) have as many EPs
+ as you wish.</p>
+
+<p>This method returns a Result.  On success, it contains a UInt which
+ represents the internal index of the EP.  On failure, the Err is empty.
+ Failure occurs if the graph has been <code>finalized</code></p>
+
+<h2 id="example-1" class='section-header'><a
+                           href="#example-1">Example</a></h2><pre class='rust '>
+<span class='kw'>fn</span> <span class='ident'>test_create_epb</span>() {
+  <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>t</span>: <span class='ident'>Turbine</span><span class='op'>&lt;</span><span class='ident'>TestSlot</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Turbine</span>::<span class='ident'>new</span>(<span class='number'>1024</span>);
+  <span class='kw'>let</span> <span class='ident'>e1</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>() {
+    <span class='prelude-val'>Ok</span>(<span class='ident'>ep</span>) <span class='op'>=&gt;</span> <span class='ident'>ep</span>,
+    <span class='prelude-val'>Err</span>(_) <span class='op'>=&gt;</span> <span class='macro'>fail</span><span class='macro'>!</span>(<span class='string'>&quot;Failed to create new EventProcessor!&quot;</span>)
+  };
+}
+</pre>
+</div><h4 id='method.ep_depends' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.ep_depends' class='fnname'>ep_depends</a>(&amp;mut self, epb_index: <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>, dep: <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/master/core/result/type.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>, <a href='http://doc.rust-lang.org/master/std/primitive.unit.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Add <code>dep</code> as a dependency to the EventProcessor at <code>epb_index</code>.</p>
+
+<p>EventProcessors may &quot;depend&quot; on one or more EventProcessors.  This links
+ them in a directed graph, such that forward progress in the buffer cannot
+ proceed until all dependencies have seen a particular event.</p>
+
+<p>Practically speaking, this means you could have a &quot;Business Logic&quot; EP that
+ only processes an event after a &quot;Disk Persistence&quot; EP has committed the
+ data to disk.</p>
+
+<p>EPs may be linked in arbitrarily complex chains (e.g. several levels deep,
+ multiple dependencies, dependencies on different levels of the tree, etc).
+ However, there is currently <em>no</em> protection against cylces.  Behavior is
+ undefined (likely a fatal error) if you introduce a cycle.</p>
+
+<p>This method returns a Result.  Both success and error Results are empty.
+ Failure occurs if the graph has been <code>finalized</code>.</p>
+
+<h2 id="simple-example" class='section-header'><a
+                           href="#simple-example">Simple Example</a></h2><pre class='rust '>
+<span class='kw'>fn</span> <span class='ident'>test_depends</span>() {
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>t</span>: <span class='ident'>Turbine</span><span class='op'>&lt;</span><span class='ident'>TestSlot</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Turbine</span>::<span class='ident'>new</span>(<span class='number'>1024</span>);
+
+    <span class='kw'>let</span> <span class='ident'>e1</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='ident'>e2</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+
+    <span class='ident'>t</span>.<span class='ident'>ep_depends</span>(<span class='ident'>e2</span>, <span class='ident'>e1</span>);   <span class='comment'>// ep2 depends on ep1</span>
+}
+</pre>
+
+<p><em>Note: <code>.unwrap()</code>` is used to make the example more readable</em></p>
+
+<h2 id="a-more-complicated-exampe" class='section-header'><a
+                           href="#a-more-complicated-exampe">A more complicated Exampe</a></h2>
+<p>This example builds a more complicated graph, which can be visualized as:</p>
+<pre class='rust '>
+<span class='ident'>Graph</span> <span class='ident'>layout</span>:
+
+<span class='ident'>e6</span> <span class='op'>-</span><span class='op'>-&gt;</span> <span class='ident'>e1</span> &lt;-<span class='op'>-</span> <span class='ident'>e2</span>
+       <span class='op'>^</span>      <span class='op'>^</span>
+       <span class='op'>|</span>      <span class='op'>|</span>
+       <span class='op'>+</span><span class='op'>-</span><span class='op'>-</span><span class='op'>-</span><span class='op'>-</span> <span class='ident'>e3</span> &lt;-<span class='op'>-</span> <span class='ident'>e4</span> &lt;-<span class='op'>-</span> <span class='ident'>e5</span>
+</pre>
+<pre class='rust '>
+<span class='kw'>fn</span> <span class='ident'>test_many_depends</span>() {
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>t</span>: <span class='ident'>Turbine</span><span class='op'>&lt;</span><span class='ident'>TestSlot</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Turbine</span>::<span class='ident'>new</span>(<span class='number'>1024</span>);
+    <span class='kw'>let</span> <span class='ident'>e1</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='ident'>e2</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='ident'>e3</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='ident'>e4</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='ident'>e5</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+    <span class='kw'>let</span> <span class='ident'>e6</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+
+    <span class='ident'>t</span>.<span class='ident'>ep_depends</span>(<span class='ident'>e2</span>, <span class='ident'>e1</span>);       <span class='comment'>//e2 depends on e1</span>
+    <span class='ident'>t</span>.<span class='ident'>ep_depends</span>(<span class='ident'>e5</span>, <span class='ident'>e4</span>);       <span class='comment'>//e5 depends on e4</span>
+    <span class='ident'>t</span>.<span class='ident'>ep_depends</span>(<span class='ident'>e3</span>, <span class='ident'>e1</span>);       <span class='comment'>//e3 depends on e1</span>
+    <span class='ident'>t</span>.<span class='ident'>ep_depends</span>(<span class='ident'>e4</span>, <span class='ident'>e3</span>);       <span class='comment'>//e4 depends on e3</span>
+    <span class='ident'>t</span>.<span class='ident'>ep_depends</span>(<span class='ident'>e3</span>, <span class='ident'>e2</span>);       <span class='comment'>//e3 depends on e2</span>
+}
+</pre>
+
+<p><em>Note: <code>.unwrap()</code> is used to make the example more readable</em></p>
+</div><h4 id='method.ep_finalize' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.ep_finalize' class='fnname'>ep_finalize</a>(&amp;mut self, token: <a href='http://doc.rust-lang.org/master/std/primitive.uint.html'>uint</a>) -&gt; <a class='struct' href='../turbine/struct.EventProcessor.html' title='turbine::EventProcessor'>EventProcessor</a>&lt;T&gt;</code></h4>
+<div class='docblock'><p>Finalize the internal EventProcessorBuilder and obtain an EventProcessor.</p>
+
+<p>When building the graph, the user is dealing with integers that represent
+ internal objects.  Once the dependency graph has been constructed, the
+ user must finalize the graph and exchange index tokens for real EventProcessors.</p>
+
+<p>If an EP has no dependencies, it automatically gains the &quot;root&quot; cursor as
+ its dependency (e.g. the writer cursor).</p>
+
+<p>Once finalize has been called (for any EP), no further EPs or dependencies
+ may be added.</p>
+
+<h1 id="example-2" class='section-header'><a
+                           href="#example-2">Example</a></h1><pre class='rust '>
+<span class='kw'>fn</span> <span class='ident'>test_finalize</span>) {
+  <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>t</span>: <span class='ident'>Turbine</span><span class='op'>&lt;</span><span class='ident'>TestSlot</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Turbine</span>::<span class='ident'>new</span>(<span class='number'>1024</span>);
+
+  <span class='kw'>let</span> <span class='ident'>e1</span>: <span class='ident'>uint</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+  <span class='kw'>let</span> <span class='ident'>e2</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+
+  <span class='ident'>t</span>.<span class='ident'>ep_depends</span>(<span class='ident'>e2</span>, <span class='ident'>e1</span>); <span class='comment'>// ep2 depends on ep1</span>
+
+  <span class='kw'>let</span> <span class='ident'>ep1</span>: <span class='ident'>EventProcessor</span><span class='op'>&lt;</span><span class='ident'>TestSlot</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>finalize</span>(<span class='ident'>e1</span>);
+  <span class='kw'>let</span> <span class='ident'>ep2</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>finalize</span>(<span class='ident'>e2</span>);
+}
+</pre>
+
+<p><em>Note: <code>.unwrap()</code> is used to make the example more readable</em></p>
+</div><h4 id='method.write' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.write' class='fnname'>write</a>(&amp;mut self, data: T)</code></h4>
+<div class='docblock'><p>Write data into Turbine</p>
+
+<p>All writes in Turbine go through the thread that owns the original Turbine
+ object.  This makes Turbine a Single Producer Multi Consumer queue (of sorts).
+ By being Single Producer, the writing code is much simpler to make lock-free.</p>
+
+<p>The write method maintains an internal <code>until</code> value which allows it to
+ minimize reads on the EP Atomics, which reduces inter-core communication.
+ The write method will busy-spin until a free slot is open.</p>
+
+<h1 id="example-3" class='section-header'><a
+                           href="#example-3">Example</a></h1><pre class='rust '>
+<span class='kw'>fn</span> <span class='ident'>test_write_one</span>() {
+  <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>t</span>: <span class='ident'>Turbine</span><span class='op'>&lt;</span><span class='ident'>TestSlot</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>Turbine</span>::<span class='ident'>new</span>(<span class='number'>1024</span>);
+  <span class='kw'>let</span> <span class='ident'>e1</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_new</span>().<span class='ident'>unwrap</span>();
+
+  <span class='kw'>let</span> <span class='ident'>event_processor</span> <span class='op'>=</span> <span class='ident'>t</span>.<span class='ident'>ep_finalize</span>(<span class='ident'>e1</span>);
+
+  <span class='kw'>let</span> <span class='ident'>d</span>: <span class='ident'>TestSlot</span> <span class='op'>=</span> <span class='ident'>Slot</span>::<span class='ident'>new</span>();    <span class='comment'>// Instantiate a new TestSlot</span>
+  <span class='ident'>d</span>.<span class='ident'>value</span> <span class='op'>=</span> <span class='number'>19</span>;                     <span class='comment'>// Our TestSlot has a public `value` variable</span>
+  <span class='ident'>t</span>.<span class='ident'>write</span>(<span class='ident'>d</span>);                       <span class='comment'>// Write the slot to Turbine</span>
+}
+</pre>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code> (or <code>str</code>), <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "turbine";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script async src="../search-index.js"></script>
+</body>
+</html>
