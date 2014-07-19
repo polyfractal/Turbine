@@ -109,13 +109,15 @@ For this reason, many of the methods that it exposes are unsafe and are wrapped 
 ### Performance
 Turbine has not been tuned or optimized yet, and there are still a lot of ugly debug lines laying around.  That said, it's already pretty darn fast.
 
-On my Macbook Air, Turbine sustains ~30m messages per second between threads (passing simple integers).  In comparison, channels max out around 4-7m messages per second.
+On my Macbook Air, Turbine sustains ~30m messages per second between threads (passing 100m integers between tasks).  In comparison, channels max out around 4-7m messages per second.
 
-Perhaps more interesting is latency.  Below is a log-log plot of latency (in nanoseconds) for Turbine and channels.  Latency was measured by sending a single event and pausing for 10 microseconds, which helps assure that neither communication method is saturated with events.
+![](turbine3.png)
+
+Perhaps more interesting is latency.  Below is a log-log plot of latency (in nanoseconds) for Turbine and channels.  Latency was measured by sending a single event and pausing for 10 microseconds, which helps assure that neither communication method is saturated with events.  The test was repeated for 100m iterations.
 
 ![](turbine1.png)
 
-Turbine averages around 250ns per message, while channels average around 16,000ns (16 microseconds).  Because log-log plots are sometimes hard to interpret, here is a log-linear plot.  The x-axis is still logarithmic, but the frequency on the y-axis is linear:
+Turbine averages around 512ns per message, while channels average around 32,000ns (32 microseconds).  Because log-log plots are sometimes hard to interpret, here is a log-linear plot.  The x-axis is still logarithmic, but the frequency on the y-axis is linear:
 
 ![](turbine2.png)
 
