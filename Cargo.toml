@@ -1,0 +1,10 @@
+[package]
+
+name = "turbine"
+version = "0.1.0"
+authors = [ "zacharyjtong@gmail.com" ]
+
+[[lib]]
+
+name = "turbine"
+crate-types = [ "dylib" ]
