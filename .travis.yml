@@ -6,3 +6,4 @@ install:
   - sudo apt-get install -qq rust-nightly cargo
 script:
   - cargo build
+  - cargo test
