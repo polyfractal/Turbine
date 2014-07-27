@@ -1,3 +1,6 @@
+env:
+  global:
+    - secure: WgsIfLL0EgjWtZL5slwlR5zM8lJt7uqblapomeCc5cPuXmbZ0Op9AfHEGmoR/CUtai1M5TbMHSCTM8g15rrjCh+vbMgbKG+1QzmHHxns7tehtbTM6YU4W9O8cjllz7yuZ4TSNsNVHxtXo1AKnI2xnnk3c2tP41fbkSqij/hpJZ0=
 before_install:
   - sudo add-apt-repository --yes ppa:hansjorg/rust
   - sudo add-apt-repository --yes ppa:cmrx64/cargo
@@ -7,3 +10,6 @@ install:
 script:
   - cargo build
   - cargo test
+  - make do
+after_script:
+  - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
