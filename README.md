@@ -2,7 +2,7 @@
 
 Turbine is a high-performance, non-locking, inter-task communication library written in Rust.
 
-[![Build Status](https://travis-ci.org/polyfractal/Turbine.svg?branch=master)](https://travis-ci.org/polyfractal/Turbine)
+Build status with Rust Nightly: [![Build Status](https://travis-ci.org/polyfractal/Turbine.svg?branch=master)](https://travis-ci.org/polyfractal/Turbine)
 
 
 ### Overview
@@ -24,7 +24,7 @@ That said, Turbine does not replace channels for a variety of reasons.
 
 ### Documentation
 
-[API docs can be found here.](http://polyfractal.github.io/Turbine/turbine/)
+API Docs are auto-generated after every commit: http://www.rust-ci.org/polyfractal/Turbine/doc/turbine/
 
 ### Usage
 
