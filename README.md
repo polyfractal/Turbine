@@ -2,6 +2,9 @@
 
 Turbine is a high-performance, non-locking, inter-task communication library written in Rust.
 
+[![Build Status](https://travis-ci.org/polyfractal/Turbine.svg?branch=master)](https://travis-ci.org/polyfractal/Turbine)
+
+
 ### Overview
 Turbine is a spiritual port of the [LMAX-Disruptor pattern](https://github.com/LMAX-Exchange/disruptor).  Although the abstractions used in this library are different from those in the original Disruptor, they share similar concepts and operate on the same principle
 
