@@ -62,14 +62,14 @@ impl<T: Slot> EventProcessor<T> {
 
         let wait_strategy: W = WaitStrategy::new(capacity);
 
-        let dep_eps = self.graph.get(self.token);
+        let ref dep_eps = self.graph.as_slice()[self.token];
         let mut deps: Vec<&Padded64> = Vec::with_capacity(dep_eps.len());
         for ep in dep_eps.iter() {
-            deps.push((*self.cursors).get(*ep));
+            deps.push(&(*self.cursors).as_slice()[*ep]);
         }
         drop(dep_eps);
 
-        let cursor = (*self.cursors).get(self.token + 1);
+        let ref cursor = &(*self.cursors).as_slice()[self.token + 1];
 
         let mask: u64 = capacity as u64 - 1;
         let mut internal_cursor = cursor.load();
