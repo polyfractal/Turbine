@@ -2,7 +2,7 @@
 use std::intrinsics;
 use std::kinds::marker;
 use std::ty::Unsafe;
-use std::sync::atomics::{Ordering, SeqCst, Release, Acquire, AcqRel, Relaxed};
+use std::sync::atomics::{Ordering, Release, Acquire, AcqRel, Relaxed};
 
 
 /// An unsigned atomic integer type, supporting basic atomic arithmetic operations

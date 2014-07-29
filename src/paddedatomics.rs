@@ -1,8 +1,7 @@
 
 #![allow(dead_code)]
 
-use std::sync::atomics::{SeqCst, Release, Acquire};
-use std::fmt::{Formatter, Result, Show};
+use std::sync::atomics::{SeqCst};
 use atomicnum::AtomicNum;
 
 //------------------------- Padded 64 -------------------------//
