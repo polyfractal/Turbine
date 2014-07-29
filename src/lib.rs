@@ -368,7 +368,7 @@ impl<T: Slot> Turbine<T> {
         }
 
         self.current_pos += 1;
-        self.cursors.get(0).store(self.current_pos);
+        self.cursors.as_slice()[0].store(self.current_pos);
         debug!("Write complete.")
 
     }
