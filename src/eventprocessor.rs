@@ -94,7 +94,7 @@ impl<T: Slot> EventProcessor<T> {
                 debug!("						ROLLOVER (total) -- ({} == {}) && ({} < {})", to, from, internal_cursor, available);
                 rollover = (true, to);
                 to = capacity;
-            } else if (to == from) {
+            } else if to == from {
                 debug!("						WTF to == from    -- ({} == {}) && ({} < {})", to, from, internal_cursor, available);
             }
 

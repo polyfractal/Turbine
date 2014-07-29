@@ -393,7 +393,7 @@ impl<T: Slot> Turbine<T> {
                 //let diff = self.current_pos - v.load();
                 min_cursor = min(min_cursor, v.load());
 
-                if (self.current_pos - min_cursor >= self.size as u64) {
+                if self.current_pos - min_cursor >= self.size as u64 {
                     debug!("Not writeable!  {} - {} == {}, which is >= {}", self.current_pos, min_cursor, (self.current_pos - min_cursor), self.size);
                     return false;
                 }
