@@ -420,6 +420,7 @@ mod test {
     use std::sync::Future;
     use time::precise_time_ns;
     use std::rand::{task_rng, Rng};
+    use std::time::Duration;
 
     use libc::funcs::posix88::unistd::usleep;
     use std::io::File;
@@ -818,7 +819,7 @@ mod test {
             let mut last = -1i;
             let mut rng = task_rng();
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-                let sleep_time = rng.gen_range(0u, 100) as u64;
+                let sleep_time = Duration::milliseconds(rng.gen_range(0i32, 100));
                 debug!("												SLEEPING {}", sleep_time);
                 timer::sleep(sleep_time);
                 debug!("												DONE SLEEPING");
