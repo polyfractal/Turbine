@@ -819,7 +819,7 @@ mod test {
             let mut last = -1i;
             let mut rng = task_rng();
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-                let sleep_time = Duration::milliseconds(rng.gen_range(0i32, 100));
+                let sleep_time = Duration::milliseconds(rng.gen_range(0i64, 100));
                 debug!("												SLEEPING {}", sleep_time);
                 timer::sleep(sleep_time);
                 debug!("												DONE SLEEPING");
