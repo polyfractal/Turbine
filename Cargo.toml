@@ -3,8 +3,10 @@
 name = "turbine"
 version = "0.1.0"
 authors = [ "zacharyjtong@gmail.com" ]
+desc = "Turbine - a high-performance, non-locking, inter-task communication library"
+license = "MIT/ASL2"
 
-[[lib]]
+[lib]
 
 name = "turbine"
 crate-types = [ "dylib" ]

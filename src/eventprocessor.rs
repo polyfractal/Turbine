@@ -1,15 +1,15 @@
 
 
-use sync::Arc;
-use waitstrategy::{WaitStrategy};
+use std::sync::Arc;
+use waitstrategy::WaitStrategy;
 use paddedatomics::Padded64;
 use ringbuffer::{RingBuffer, Slot};
 
 /// EventProcessors provide functionality to process and consume data from the ring buffer
 pub struct EventProcessor<T> {
-    graph: Arc<Vec<Vec<uint>>>,
+    graph: Arc<Vec<Vec<usize>>>,
     cursors: Arc<Vec<Padded64>>,
-    token: uint,
+    token: usize,
     ring: Arc<RingBuffer<T>>
 }
 
@@ -23,7 +23,7 @@ impl<T: Slot> EventProcessor<T> {
     /// - graph: a dependency graph, showing how all the EPs relate to eachother.
     /// - cursors: a vector of Padded64 atomics which act as cursors into the ring buffer
     /// - token: the index in the graph which represents this EP
-    pub fn new(ring: Arc<RingBuffer<T>>, graph: Arc<Vec<Vec<uint>>>, cursors: Arc<Vec<Padded64>>, token: uint) -> EventProcessor<T> {
+    pub fn new(ring: Arc<RingBuffer<T>>, graph: Arc<Vec<Vec<usize>>>, cursors: Arc<Vec<Padded64>>, token: usize) -> EventProcessor<T> {
         EventProcessor::<T> {
             graph: graph,
             cursors: cursors,
@@ -57,7 +57,8 @@ impl<T: Slot> EventProcessor<T> {
     ///     });
     ///});
     ///```
-    pub fn start<W: WaitStrategy>(&self, f: |data: &[T]| -> Result<(),()>) {
+    pub fn start<F, W: WaitStrategy>(&self, f: F)
+    where F: FnMut(&[T]) -> Result<(),()> {
         let capacity = self.ring.get_capacity();
 
         let wait_strategy: W = WaitStrategy::new(capacity);
@@ -81,8 +82,8 @@ impl<T: Slot> EventProcessor<T> {
             let available = wait_strategy.wait_for(internal_cursor, &deps);
             debug!("							Available: {}", available);
 
-            let from = (internal_cursor & mask) as uint;
-            let mut to = (available & mask) as uint;
+            let from = (internal_cursor & mask) as usize;
+            let mut to = (available & mask) as usize;
 
             debug!("              from: {}, to: {} -- {}", from, to, (to < from));
             if to < from {
@@ -110,10 +111,10 @@ impl<T: Slot> EventProcessor<T> {
                 f(data)
             };
 
-            if rollover.val0() == true {
+            if rollover.0 {
                 debug!("ROlLOVER GET");
                 status = unsafe {
-                    let data: &[T] = self.ring.get(0, rollover.val1());
+                    let data: &[T] = self.ring.get(0, rollover.1);
                     f(data)
                 };
                 rollover = (false,0);
