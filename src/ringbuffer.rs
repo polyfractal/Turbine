@@ -1,11 +1,12 @@
 
-use std::ty::Unsafe;
+use std::cell::UnsafeCell;
+use std::iter::repeat;
 
-macro_rules! is_pow2(
+macro_rules! is_pow2{
     ($x:ident) => (
       (($x != 0) && ($x & ($x - 1)) == 0)
     );
-)
+}
 
 /// A container for data inside the RingBuffer
 ///
@@ -44,16 +45,16 @@ pub trait Slot: Send {
 }
 
 pub struct RingBuffer<T> {
-    entries: Unsafe<Vec<T>>
+    entries: UnsafeCell<Vec<T>>
 }
 
 impl<T: Slot + Send> RingBuffer<T> {
 
-    pub fn new(size: uint) -> RingBuffer<T> {
-        let entries: Unsafe<Vec<T>> = match size {
-            0 => fail!("Buffer Size must be greater than zero."),
-            s if !(is_pow2!(s)) => fail!("Buffer Size must be a power of two"),
-            _ => Unsafe::new(Vec::from_fn(size, |_| Slot::new()))
+    pub fn new(size: usize) -> RingBuffer<T> {
+        let entries: UnsafeCell<Vec<T>> = match size {
+            0 => panic!("Buffer Size must be greater than zero."),
+            s if !(is_pow2!(s)) => panic!("Buffer Size must be a power of two"),
+            _ => UnsafeCell::new(repeat(()).take(size).map(|_| Slot::new()).collect())
         };
 
         RingBuffer::<T> {
@@ -61,24 +62,24 @@ impl<T: Slot + Send> RingBuffer<T> {
         }
     }
 
-    pub fn get_capacity(&self) -> uint {
+    pub fn get_capacity(&self) -> usize {
         let v: *mut Vec<T> = unsafe { self.entries.get() };
         unsafe { (*v).len() }
     }
 
     // Unsafe because we have no guarantees the caller won't invalidate this slot
-    pub unsafe fn get(&self, from: uint, size: uint) -> &[T] {
+    pub unsafe fn get(&self, from: usize, size: usize) -> &[T] {
         debug!("              RingBuffer get({}, {})", from, size);
-        let v: *mut Vec<T> = self.entries.get();
-        (*v).slice(from, size)
+        let v : *mut Vec<T> = self.entries.get();
+        ::std::slice::from_raw_parts(v.offset(from), size)
     }
 
     // Unsafe because we have no guarantees the caller won't invalidate this slot
-    pub unsafe fn write(&self, position: uint, data: T) {
+    pub unsafe fn write(&self, position: usize, data: T) {
         let v: *mut Vec<T> = self.entries.get();
-        let slot = (*v).get_mut(position);
-        drop(&*slot);
-        *slot = data;
+        let slot = v.get_mut(position);
+        drop(slot);
+        slot = data;
     }
 }
 

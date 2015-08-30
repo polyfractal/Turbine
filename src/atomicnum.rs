@@ -1,38 +1,34 @@
-
 use std::intrinsics;
-use std::kinds::marker;
-use std::ty::Unsafe;
-use std::sync::atomics::{Ordering, Release, Acquire, AcqRel, Relaxed};
-
+use std::cell::UnsafeCell;
+use std::sync::atomic::Ordering::{self, Release, Acquire, AcqRel, Relaxed};
 
 /// An unsigned atomic integer type, supporting basic atomic arithmetic operations
 pub struct AtomicNum<T> {
-    v: Unsafe<T>,
-    nocopy: marker::NoCopy
+    v: UnsafeCell<T>,
 }
 
-impl<T: Num> AtomicNum<T> {
+impl<T> AtomicNum<T> {
     /// Create a new `AtomicUint`
     pub fn new(v: T) -> AtomicNum<T> {
-            AtomicNum { v: Unsafe::new(v), nocopy: marker::NoCopy }
+        AtomicNum { v: UnsafeCell::new(v) }
     }
 
     /// Load the value
     #[inline]
     pub fn load(&self, order: Ordering) -> T {
-            unsafe { atomic_load(self.v.get() as *const T, order) }
+        unsafe { atomic_load(self.v.get() as *const T, order) }
     }
 
     /// Store the value
     #[inline]
     pub fn store(&self, val: T, order: Ordering) {
-            unsafe { atomic_store(self.v.get(), val, order); }
+        unsafe { atomic_store(self.v.get(), val, order); }
     }
 
     /// Store a value, returning the old value
     #[inline]
     pub fn swap(&self, val: T, order: Ordering) -> T {
-            unsafe { atomic_swap(self.v.get(), val, order) }
+        unsafe { atomic_swap(self.v.get(), val, order) }
     }
 
     /// If the current value is the same as expected, store a new value
@@ -42,7 +38,7 @@ impl<T: Num> AtomicNum<T> {
     /// If the return value is equal to `old` then the value was updated.
     #[inline]
     pub fn compare_and_swap(&self, old: T, new: T, order: Ordering) -> T {
-            unsafe { atomic_compare_and_swap(self.v.get(), old, new, order) }
+        unsafe { atomic_compare_and_swap(self.v.get(), old, new, order) }
     }
 
     /// Add to the current value, returning the previous
@@ -58,7 +54,7 @@ impl<T: Num> AtomicNum<T> {
     /// ```
     #[inline]
     pub fn fetch_add(&self, val: T, order: Ordering) -> T {
-            unsafe { atomic_add(self.v.get(), val, order) }
+        unsafe { atomic_add(self.v.get(), val, order) }
     }
 
     /// Subtract from the current value, returning the previous
@@ -74,7 +70,7 @@ impl<T: Num> AtomicNum<T> {
     /// ```
     #[inline]
     pub fn fetch_sub(&self, val: T, order: Ordering) -> T {
-            unsafe { atomic_sub(self.v.get(), val, order) }
+        unsafe { atomic_sub(self.v.get(), val, order) }
     }
 
     /// Bitwise and with the current value, returning the previous
@@ -89,7 +85,7 @@ impl<T: Num> AtomicNum<T> {
     /// assert_eq!(0b100001, foo.load(SeqCst));
     #[inline]
     pub fn fetch_and(&self, val: T, order: Ordering) -> T {
-            unsafe { atomic_and(self.v.get(), val, order) }
+        unsafe { atomic_and(self.v.get(), val, order) }
     }
 
     /// Bitwise or with the current value, returning the previous
@@ -104,7 +100,7 @@ impl<T: Num> AtomicNum<T> {
     /// assert_eq!(0b111111, foo.load(SeqCst));
     #[inline]
     pub fn fetch_or(&self, val: T, order: Ordering) -> T {
-            unsafe { atomic_or(self.v.get(), val, order) }
+        unsafe { atomic_or(self.v.get(), val, order) }
     }
 
     /// Bitwise xor with the current value, returning the previous
@@ -119,7 +115,7 @@ impl<T: Num> AtomicNum<T> {
     /// assert_eq!(0b011110, foo.load(SeqCst));
     #[inline]
     pub fn fetch_xor(&self, val: T, order: Ordering) -> T {
-            unsafe { atomic_xor(self.v.get(), val, order) }
+        unsafe { atomic_xor(self.v.get(), val, order) }
     }
 }
 
@@ -127,29 +123,29 @@ impl<T: Num> AtomicNum<T> {
 #[inline]
 unsafe fn atomic_store<T>(dst: *mut T, val: T, order:Ordering) {
     match order {
-            Release => intrinsics::atomic_store_rel(dst, val),
-            Relaxed => intrinsics::atomic_store_relaxed(dst, val),
-            _       => intrinsics::atomic_store(dst, val)
+        Release => intrinsics::atomic_store_rel(dst, val),
+        Relaxed => intrinsics::atomic_store_relaxed(dst, val),
+        _       => intrinsics::atomic_store(dst, val)
     }
 }
 
 #[inline]
 unsafe fn atomic_load<T>(dst: *const T, order:Ordering) -> T {
     match order {
-            Acquire => intrinsics::atomic_load_acq(dst),
-            Relaxed => intrinsics::atomic_load_relaxed(dst),
-            _       => intrinsics::atomic_load(dst)
+        Acquire => intrinsics::atomic_load_acq(dst),
+        Relaxed => intrinsics::atomic_load_relaxed(dst),
+        _       => intrinsics::atomic_load(dst)
     }
 }
 
 #[inline]
 unsafe fn atomic_swap<T>(dst: *mut T, val: T, order: Ordering) -> T {
     match order {
-            Acquire => intrinsics::atomic_xchg_acq(dst, val),
-            Release => intrinsics::atomic_xchg_rel(dst, val),
-            AcqRel  => intrinsics::atomic_xchg_acqrel(dst, val),
-            Relaxed => intrinsics::atomic_xchg_relaxed(dst, val),
-            _       => intrinsics::atomic_xchg(dst, val)
+        Acquire => intrinsics::atomic_xchg_acq(dst, val),
+        Release => intrinsics::atomic_xchg_rel(dst, val),
+        AcqRel  => intrinsics::atomic_xchg_acqrel(dst, val),
+        Relaxed => intrinsics::atomic_xchg_relaxed(dst, val),
+        _       => intrinsics::atomic_xchg(dst, val)
     }
 }
 
@@ -157,11 +153,11 @@ unsafe fn atomic_swap<T>(dst: *mut T, val: T, order: Ordering) -> T {
 #[inline]
 unsafe fn atomic_add<T>(dst: *mut T, val: T, order: Ordering) -> T {
     match order {
-            Acquire => intrinsics::atomic_xadd_acq(dst, val),
-            Release => intrinsics::atomic_xadd_rel(dst, val),
-            AcqRel  => intrinsics::atomic_xadd_acqrel(dst, val),
-            Relaxed => intrinsics::atomic_xadd_relaxed(dst, val),
-            _       => intrinsics::atomic_xadd(dst, val)
+        Acquire => intrinsics::atomic_xadd_acq(dst, val),
+        Release => intrinsics::atomic_xadd_rel(dst, val),
+        AcqRel  => intrinsics::atomic_xadd_acqrel(dst, val),
+        Relaxed => intrinsics::atomic_xadd_relaxed(dst, val),
+        _       => intrinsics::atomic_xadd(dst, val)
     }
 }
 
