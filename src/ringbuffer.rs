@@ -1,6 +1,7 @@
 
 use std::cell::UnsafeCell;
 use std::iter::repeat;
+use std::mem;
 
 macro_rules! is_pow2{
     ($x:ident) => (
@@ -70,16 +71,15 @@ impl<T: Slot + Send> RingBuffer<T> {
     // Unsafe because we have no guarantees the caller won't invalidate this slot
     pub unsafe fn get(&self, from: usize, size: usize) -> &[T] {
         debug!("              RingBuffer get({}, {})", from, size);
-        let v : *mut Vec<T> = self.entries.get();
-        ::std::slice::from_raw_parts(v.offset(from), size)
+        &self.entries.get().as_ref().unwrap()[from .. from + size]
     }
 
     // Unsafe because we have no guarantees the caller won't invalidate this slot
     pub unsafe fn write(&self, position: usize, data: T) {
-        let v: *mut Vec<T> = self.entries.get();
-        let slot = v.get_mut(position);
-        drop(slot);
-        slot = data;
+        let v = self.entries.get();
+        let mut slot = v.as_mut().unwrap().get_mut(position).unwrap();
+        //TODO: Do we need to `drop` the current data?
+        mem::replace(slot, data);
     }
 }
 

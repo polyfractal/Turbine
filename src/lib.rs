@@ -92,7 +92,7 @@ mod ringbuffer;
 /// The main Turbine structure, which controls the operation of this library.
 pub struct Turbine<T> {
     finalized: bool,
-    epb: Vec<Option<Vec<usize>>>,
+    epb: Vec<Vec<usize>>,
     graph: Arc<Vec<Vec<usize>>>,
     cursors: Arc<Vec<Padded64>>,
     ring: Arc<RingBuffer<T>>,
@@ -163,7 +163,7 @@ impl<T: Slot> Turbine<T> {
         match self.finalized {
             true => Err(()),
             false => {
-                    self.epb.push(None);
+                    self.epb.push(vec![]);
                     Ok(self.epb.len() - 1)
             }
         }
@@ -237,14 +237,10 @@ impl<T: Slot> Turbine<T> {
             return Err(());
         }
 
-        let epb = self.epb.get_mut(epb_index);
-        match *epb {
-            Some(ref mut v) => v.push(dep),
-            None => {
-                *epb = Some(vec![dep])
-            }
-        };
-        Ok(())
+        if let Some(ref slot) = self.epb.get_mut(epb_index) {
+            *slot.push(dep);
+            Ok(())
+        } else { Err(()) }
     }
 
     /// Finalize the internal EventProcessorBuilder and obtain an EventProcessor.
@@ -303,10 +299,7 @@ impl<T: Slot> Turbine<T> {
         cursors.push(Padded64::new(0));
 
         for node in self.epb.iter() {
-            let deps: Vec<usize> = match *node {
-                Some(ref v) => v.clone(),
-                None => vec![0]
-            };
+            let deps: Vec<usize> = node.clone();
             eps.push(deps);
             cursors.push(Padded64::new(0));
         }
