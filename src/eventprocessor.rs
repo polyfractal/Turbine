@@ -58,7 +58,7 @@ impl<T: Slot> EventProcessor<T> {
     ///});
     ///```
     pub fn start<F, W: WaitStrategy>(&self, f: F)
-    where F: FnMut(&[T]) -> Result<(),()> {
+    where F: Fn(&[T]) -> Result<(),()> {
         let capacity = self.ring.get_capacity();
 
         let wait_strategy: W = WaitStrategy::new(capacity);

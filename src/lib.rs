@@ -1,5 +1,13 @@
 #![crate_type = "rlib"]
 //#![deny(missing_doc)]
+// until I have network access and can fetch the log crate
+#![feature(rustc_private)]
+// for ringbuffer.rs: (*mut).as_mut()
+#![feature(ptr_as_ref)]
+// cursors.as_slice()
+#![feature(convert)]
+// for atomicnum
+#![feature(core_intrinsics)]
 
 //! Turbine is a high-performance, non-locking, inter-task communication library.
 //!
@@ -72,11 +80,10 @@
 extern crate log;
 
 #[cfg(test)] extern crate libc;
-#[cfg(test)] extern crate time;
+//#[cfg(test)] extern crate time;
 
 use std::sync::Arc;
 use std::cmp::min;
-use std::sync::atomic::{AtomicIsize, AtomicUsize};
 
 pub use ringbuffer::{RingBuffer, Slot};
 pub use waitstrategy::{WaitStrategy, BusyWait};
@@ -237,8 +244,8 @@ impl<T: Slot> Turbine<T> {
             return Err(());
         }
 
-        if let Some(ref slot) = self.epb.get_mut(epb_index) {
-            *slot.push(dep);
+        if let Some(ref mut slot) = self.epb.get_mut(epb_index) {
+            slot.push(dep);
             Ok(())
         } else { Err(()) }
     }
@@ -408,8 +415,7 @@ mod test {
     use std::time::Duration;
 
     use libc::funcs::posix88::unistd::usleep;
-    use std::io::File;
-    use std::num::abs;
+    use std::fs::File;
 
     //use TestSlot;
 
@@ -1072,7 +1078,7 @@ mod test {
             event_processor.start::<BusyWait>(|data: &[TestSlotU64]| -> Result<(),()> {
                 for d in data.iter() {
                     let end = precise_time_ns();
-                    let total = abs((end - d.value) as i64) as u64;
+                    let total = ((end - d.value) as i64).abs() as u64;
                     latencies.push(total);
 
                     //error!("{}, {}, {}", d.value, end, total);

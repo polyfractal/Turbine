@@ -1,4 +1,3 @@
-
 use std::cell::UnsafeCell;
 use std::iter::repeat;
 use std::mem;
@@ -76,10 +75,7 @@ impl<T: Slot + Send> RingBuffer<T> {
 
     // Unsafe because we have no guarantees the caller won't invalidate this slot
     pub unsafe fn write(&self, position: usize, data: T) {
-        let v = self.entries.get();
-        let mut slot = v.as_mut().unwrap().get_mut(position).unwrap();
-        //TODO: Do we need to `drop` the current data?
-        mem::replace(slot, data);
+        self.entries.get().as_mut().unwrap()[position] = data;
     }
 }
 
@@ -89,7 +85,7 @@ mod tests {
 
     use super::{RingBuffer, Slot};
 
-    #[deriving(Show)]
+    #[derive(Debug)]
     struct TestSlot;
 
     impl Slot for TestSlot {
@@ -104,13 +100,13 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn new_ringbuff_non_power_of_two() {
         let _: RingBuffer<TestSlot> = RingBuffer::new(5);
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn new_ringbuff_zero() {
         let _: RingBuffer<TestSlot> = RingBuffer::new(0);
     }

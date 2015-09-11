@@ -234,7 +234,7 @@ unsafe fn atomic_xor<T>(dst: *mut T, val: T, order: Ordering) -> T {
 #[cfg(test)]
 mod tests {
     use super::AtomicNum;
-    use std::sync::atomics::{SeqCst, Release, Acquire, AcqRel, Relaxed};
+    use std::sync::atomic::Ordering::{SeqCst, Release, Acquire, AcqRel, Relaxed};
 
     #[test]
     fn test_max_store() {
