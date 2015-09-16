@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::intrinsics;
 use std::cell::UnsafeCell;
 use std::sync::atomic::Ordering::{self, Release, Acquire, AcqRel, Relaxed};

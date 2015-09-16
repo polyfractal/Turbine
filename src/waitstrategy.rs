@@ -63,7 +63,7 @@ impl WaitStrategy for BusyWait {
     }
 
     fn wait_for(&self, sequence: u64, deps: &Vec<&Padded64>) -> u64 {
-        let mut available: u64 = 0;
+        let available: u64;
         debug!("					Waiting for: {}", sequence);
         loop {
             match self.can_read(sequence, deps) {

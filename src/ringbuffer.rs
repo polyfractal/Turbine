@@ -1,6 +1,5 @@
 use std::cell::UnsafeCell;
 use std::iter::repeat;
-use std::mem;
 
 macro_rules! is_pow2{
     ($x:ident) => (
@@ -63,7 +62,7 @@ impl<T: Slot + Send> RingBuffer<T> {
     }
 
     pub fn get_capacity(&self) -> usize {
-        let v: *mut Vec<T> = unsafe { self.entries.get() };
+        let v: *mut Vec<T> = self.entries.get();
         unsafe { (*v).len() }
     }
 

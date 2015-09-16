@@ -1,15 +1,13 @@
 #![crate_type = "rlib"]
 //#![deny(missing_doc)]
-// until I have network access and can fetch the log crate
-#![feature(rustc_private)]
 // for ringbuffer.rs: (*mut).as_mut()
 #![feature(ptr_as_ref)]
 // cursors.as_slice()
 #![feature(convert)]
 // for atomicnum
-#![feature(core_intrinsics)]
+#![feature(core_isizerinsics)]
 
-//! Turbine is a high-performance, non-locking, inter-task communication library.
+//! Turbine is a high-performance, non-locking, isizeer-task communication library.
 //!
 //! Turbine is a spiritual port of the LMAX-Disruptor pattern.  Although the
 //! abstractions used in this library are different from those in the original
@@ -39,7 +37,7 @@
 //! ```
 //!   // This struct will be the container for your data
 //!   struct TestSlot {
-//!       pub value: int
+//!       pub value: isize
 //!   }
 //!
 //!   // Your container must implement the Slot trait
@@ -70,7 +68,7 @@
 //!   	});
 //!   });
 //!
-//!   // Write data into Turbine
+//!   // Write data isizeo Turbine
 //!   let mut x: TestSlot = Slot::new();
 //!   x.value = 19;
 //!   turbine.write(x);
@@ -80,7 +78,8 @@
 extern crate log;
 
 #[cfg(test)] extern crate libc;
-//#[cfg(test)] extern crate time;
+#[cfg(test)] extern crate time;
+#[cfg(test)] extern crate rand;
 
 use std::sync::Arc;
 use std::cmp::min;
@@ -151,7 +150,7 @@ impl<T: Slot> Turbine<T> {
     /// as you wish.
     ///
     /// This method returns a Result.  On success, it contains a usize which
-    /// represents the internal index of the EP.  On failure, the Err is empty.
+    /// represents the isizeernal index of the EP.  On failure, the Err is empty.
     /// Failure occurs if the graph has been `finalized`
     ///
     ///## Example
@@ -189,7 +188,7 @@ impl<T: Slot> Turbine<T> {
     /// EPs may be linked in arbitrarily complex chains (e.g. several levels deep,
     /// multiple dependencies, dependencies on different levels of the tree, etc).
     /// However, there is currently *no* protection against cylces.  Behavior is
-    /// undefined (likely a fatal error) if you introduce a cycle.
+    /// undefined (likely a fatal error) if you isizeroduce a cycle.
     ///
     /// This method returns a Result.  Both success and error Results are empty.
     /// Failure occurs if the graph has been `finalized`.
@@ -250,10 +249,10 @@ impl<T: Slot> Turbine<T> {
         } else { Err(()) }
     }
 
-    /// Finalize the internal EventProcessorBuilder and obtain an EventProcessor.
+    /// Finalize the isizeernal EventProcessorBuilder and obtain an EventProcessor.
     ///
-    /// When building the graph, the user is dealing with integers that represent
-    /// internal objects.  Once the dependency graph has been constructed, the
+    /// When building the graph, the user is dealing with isizeegers that represent
+    /// isizeernal objects.  Once the dependency graph has been constructed, the
     /// user must finalize the graph and exchange index tokens for real EventProcessors.
     ///
     /// If an EP has no dependencies, it automatically gains the "root" cursor as
@@ -288,10 +287,10 @@ impl<T: Slot> Turbine<T> {
 
     /// Finalize the dependency graph.
     ///
-    /// Internally, this converts the dependencies into an adjacency list.
+    /// isizeernally, this converts the dependencies isizeo an adjacency list.
     /// The index of an item in the adjacency list represents it's cursor ID, while
     /// the values at that index represent that EP's dependencies.  A second vector
-    /// is maintained which holds the actual cursors.
+    /// is maisizeained which holds the actual cursors.
     ///
     /// In practice, code will look up the dependencies in the graph, then use the
     /// retrieved values to read specific cursor values.
@@ -317,14 +316,14 @@ impl<T: Slot> Turbine<T> {
         self.finalized = true;
     }
 
-    /// Write data into Turbine
+    /// Write data isizeo Turbine
     ///
     /// All writes in Turbine go through the thread that owns the original Turbine
     /// object.  This makes Turbine a Single Producer Multi Consumer queue (of sorts).
     /// By being Single Producer, the writing code is much simpler to make lock-free.
     ///
-    /// The write method maintains an internal `until` value which allows it to
-    /// minimize reads on the EP Atomics, which reduces inter-core communication.
+    /// The write method maisizeains an isizeernal `until` value which allows it to
+    /// minimize reads on the EP Atomics, which reduces isizeer-core communication.
     /// The write method will busy-spin until a free slot is open.
     ///
     ///# Example
@@ -402,20 +401,20 @@ impl<T: Slot> Turbine<T> {
 }
 
 
+#[feature(rand)]
 #[cfg(test)]
-mod test {
+mod test {    
+    use libc::funcs::posix88::unistd::usleep;
+    use std::fs::File;
+    use std::path::Path;
+    use std::rand::thread_rng;
+    use std::sync::mpsc::{channel, Sender, Receiver};
+    use std::thread;
+    use time::{Duration, precise_time_ns};
 
     use Turbine;
     use Slot;
     use waitstrategy::BusyWait;
-    use std::io::timer;
-    use std::sync::Future;
-    use time::precise_time_ns;
-    use std::rand::{task_rng, Rng};
-    use std::time::Duration;
-
-    use libc::funcs::posix88::unistd::usleep;
-    use std::fs::File;
 
     //use TestSlot;
 
@@ -536,11 +535,11 @@ mod test {
         let ep1 = t.ep_finalize(e1.unwrap());
         let ep2 = t.ep_finalize(e2.unwrap());
 
-        spawn(move || {
+        thread::spawn(move || {
             let a = ep1;
         });
 
-        spawn(move || {
+        thread::spawn(move || {
             let b = ep2;
         });
     }
@@ -632,9 +631,9 @@ mod test {
         let e1 = t.ep_new().unwrap();
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move || {
+        let mut future = thread::spawn(move || {
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
                 //debug!("data[0].value: {}", data[0].value);
                 assert!(data.len() == 1);
@@ -663,9 +662,9 @@ mod test {
         let e1 = t.ep_new().unwrap();
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -694,7 +693,7 @@ mod test {
 
         for i in 0u64..1000 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as int;
+            x.value = i as isize;
             debug!("Writing: {}", x.value);
             t.write(x);
         }
@@ -710,9 +709,9 @@ mod test {
         let e1 = t.ep_new().unwrap();
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -736,7 +735,7 @@ mod test {
 
         for i in 0u64..1200 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as int;
+            x.value = i as isize;
             debug!("______Writing {}", i);
             t.write(x);
 
@@ -751,10 +750,10 @@ mod test {
         let e1 = t.ep_new().unwrap();
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -783,7 +782,7 @@ mod test {
 
         for i in 0u64..50001 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as int;
+            x.value = i as isize;
             debug!("Writing {}", i);
             t.write(x);
         }
@@ -802,17 +801,17 @@ mod test {
         let e1 = t.ep_new().unwrap();
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
-            let mut rng = task_rng();
+            let mut rng = thread_rng();
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
                 let sleep_time = Duration::milliseconds(rng.gen_range(0i64, 100));
                 debug!("												SLEEPING {}", sleep_time);
-                timer::sleep(sleep_time);
+                thread::sleep(sleep_time);
                 debug!("												DONE SLEEPING");
 
                 for x in data.iter() {
@@ -837,7 +836,7 @@ mod test {
 
         for i in 0u64..50001 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as int;
+            x.value = i as isize;
             debug!("Writing {} -----------------------------------------------------", i);
             t.write(x);
         }
@@ -857,9 +856,9 @@ mod test {
         let e2 = t.ep_new().unwrap();
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -882,9 +881,9 @@ mod test {
         });
 
         let event_processor2 = t.ep_finalize(e2);
-        let (tx2, rx2): (Sender<int>, Receiver<int>) = channel();
+        let (tx2, rx2): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
             event_processor2.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -908,7 +907,7 @@ mod test {
 
         for i in 0u64..1200 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as int;
+            x.value = i as isize;
             //debug!("______Writing {}", i);
             t.write(x);
 
@@ -927,9 +926,9 @@ mod test {
         t.ep_depends(e2, e1);
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -952,9 +951,9 @@ mod test {
         });
 
         let event_processor2 = t.ep_finalize(e2);
-        let (tx2, rx2): (Sender<int>, Receiver<int>) = channel();
+        let (tx2, rx2): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             let mut last = -1;
             event_processor2.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
@@ -979,7 +978,7 @@ mod test {
 
         for i in 0..1200 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as int;
+            x.value = i as isize;
             //debug!("______Writing {}", i);
             t.write(x);
 
@@ -992,10 +991,10 @@ mod test {
     #[test]
     fn bench_chan_10m() {
 
-        let (tx_bench, rx_bench): (Sender<int>, Receiver<int>) = channel();
+        let (tx_bench, rx_bench): (Sender<isize>, Receiver<isize>) = channel();
 
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             for _ in 0..10000000 {
                 tx_bench.send(1);
             }
@@ -1021,9 +1020,9 @@ mod test {
         let e1 = t.ep_new().unwrap();
 
         let event_processor = t.ep_finalize(e1);
-        let (tx, rx): (Sender<int>, Receiver<int>) = channel();
+        let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter = 0;
             event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
                 for _ in data.iter() {
@@ -1071,7 +1070,7 @@ mod test {
         let event_processor = t.ep_finalize(e1);
         let (tx, rx): (Sender<Vec<u64>>, Receiver<Vec<u64>>) = channel();
 
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             let mut counter: isize = 0;
             let mut latencies = Vec::with_capacity(1000000);
 
@@ -1131,8 +1130,7 @@ mod test {
 
         let (tx_bench, rx_bench): (Sender<u64>, Receiver<u64>) = channel();
 
-
-        let mut future = Future::spawn(move|| {
+        let mut future = thread::spawn(move|| {
             for _ in 0..1000000  {
                 let x = precise_time_ns();
                 tx_bench.send(x);
@@ -1148,7 +1146,7 @@ mod test {
             counter += 1;
             let end = precise_time_ns();
             let start = rx_bench.recv();
-            let total = abs((end - start) as i64) as u64;	// because ticks can go backwards between different cores
+            let total = ((end - start) as i64).abs() as u64;	// because ticks can go backwards between different cores
             latencies.push(total);
             //error!("{}, {}, {}", start, end, total);
         }
