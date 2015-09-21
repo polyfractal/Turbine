@@ -47,7 +47,10 @@ pub struct RingBuffer<T> {
     entries: UnsafeCell<Vec<T>>
 }
 
-impl<T: Slot + Send> RingBuffer<T> {
+unsafe impl<T: Slot> Send for RingBuffer<T> {}
+unsafe impl<T: Slot> Sync for RingBuffer<T> {}
+
+impl<T: Slot> RingBuffer<T> {
 
     pub fn new(size: usize) -> RingBuffer<T> {
         let entries: UnsafeCell<Vec<T>> = match size {

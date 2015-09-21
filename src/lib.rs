@@ -63,7 +63,7 @@
 //!
 //!   // Spawn a new thread, wait for data to arrive
 //!   spawn(move|| {
-//!   	event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+//!   	event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
 //!   	    // ... process work here ... //
 //!   	});
 //!   });
@@ -403,24 +403,29 @@ impl<T: Slot> Turbine<T> {
 
 #[feature(rand)]
 #[cfg(test)]
-mod test {    
+mod test {
     use libc::funcs::posix88::unistd::usleep;
+    use rand::Rng;
     use std::fs::File;
+    use std::io::Write;
     use std::path::Path;
-    use std::rand::thread_rng;
+    use rand::thread_rng;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{channel, Sender, Receiver};
     use std::thread;
-    use time::{Duration, precise_time_ns};
+    use std::time::Duration;
+    use time::precise_time_ns;
 
     use Turbine;
     use Slot;
     use waitstrategy::BusyWait;
-
-    //use TestSlot;
-
+    
+    #[derive(Copy, Clone)]
     struct TestSlot {
         pub value: i32
     }
+
+    unsafe impl Sync for TestSlot {}
 
     impl Slot for TestSlot {
         fn new() -> TestSlot {
@@ -430,9 +435,12 @@ mod test {
         }
     }
 
+    #[derive(Copy, Clone)]
     struct TestSlotU64 {
         pub value: u64
     }
+
+    unsafe impl Sync for TestSlotU64 {}
 
     impl Slot for TestSlotU64 {
         fn new() -> TestSlotU64 {
@@ -587,7 +595,7 @@ mod test {
         assert!(t.current_pos == 0);
 
         //move our reader's cursor so we can rollover
-        t.cursors.get(1).store(1);
+        t.cursors.get(1).unwrap().store(1);
 
         for i in 1u64..1025 {
             t.write(Slot::new());
@@ -608,7 +616,7 @@ mod test {
         assert!(t.current_pos == 0);
 
         //move our reader's cursor so we can rollover
-        t.cursors.get(1).store(1);
+        t.cursors.get(1).unwrap().store(1);
 
         for i in 1u64..1025 {
             t.write(Slot::new());
@@ -617,7 +625,7 @@ mod test {
         }
 
         //move our reader's cursor so we can rollover again
-        t.cursors.get(1).store(1025);
+        t.cursors.get(1).unwrap().store(1025);
         for i in 1..1025 {
             t.write(Slot::new());
         }
@@ -634,7 +642,7 @@ mod test {
         let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move || {
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
                 //debug!("data[0].value: {}", data[0].value);
                 assert!(data.len() == 1);
                 assert!(data[0].value == 19);
@@ -651,7 +659,7 @@ mod test {
         t.write(x);
 
         assert!(t.current_pos == 1);
-        if rx.recv_opt().is_err() == true {panic!()}
+        if rx.recv().is_err() == true {panic!()}
         //debug!("Test::end");
     }
 
@@ -665,22 +673,22 @@ mod test {
         let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-
+            let mut counter = AtomicUsize::new(0);
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut last = -1;
                 //debug!("EP::data.len: {}", data.len());
+                let mut previous = -1;
 
                 for x in data.iter() {
                     debug!("EP:: last: {}, value: {}", last, x.value);
                     assert!(last + 1 == x.value);
-                    counter += 1;
+                    previous = counter.fetch_add(1, Ordering::SeqCst);
                     last = x.value;
-                    debug!("EP::counter: {}", counter);
+                    debug!("EP::counter: {}", counter.load(Ordering::SeqCst));
                 }
 
-                if counter == 1000 {
-                        return Err(());
+                if previous == 999 {
+                    return Err(());
                 } else {
                     return Ok(());
                 }
@@ -693,12 +701,12 @@ mod test {
 
         for i in 0u64..1000 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as isize;
+            x.value = i as i32;
             debug!("Writing: {}", x.value);
             t.write(x);
         }
 
-        if rx.recv_opt().is_err() == true {panic!()}
+        if rx.recv().is_err() == true {panic!()}
 
     }
 
@@ -712,9 +720,9 @@ mod test {
         let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut counter = 0;
+                let mut last = -1;
                 for x in data.iter() {
                     debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
                     assert!(last + 1 == x.value);
@@ -724,7 +732,7 @@ mod test {
                 }
 
                 if counter >= 1200 {
-                        return Err(());
+                    return Err(());
                 } else {
                     return Ok(());
                 }
@@ -735,12 +743,12 @@ mod test {
 
         for i in 0u64..1200 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as isize;
+            x.value = i as i32;
             debug!("______Writing {}", i);
             t.write(x);
 
         }
-        if rx.recv_opt().is_err() == true {panic!()}
+        if rx.recv().is_err() == true {panic!()}
 
     }
 
@@ -754,10 +762,9 @@ mod test {
 
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut counter = 0;
+                let mut last = -1;
                 //debug!("EP::data.len: {}", data.len());
 
                 for x in data.iter() {
@@ -782,13 +789,13 @@ mod test {
 
         for i in 0u64..50001 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as isize;
+            x.value = i as i32;
             debug!("Writing {}", i);
             t.write(x);
         }
 
         debug!("Exit write loop");
-        if rx.recv_opt().is_err() == true {panic!()}
+        if rx.recv().is_err() == true {panic!()}
         debug!("Recv_opt done");
         return;
         //
@@ -805,12 +812,12 @@ mod test {
 
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            let mut rng = thread_rng();
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
-                let sleep_time = Duration::milliseconds(rng.gen_range(0i64, 100));
-                debug!("												SLEEPING {}", sleep_time);
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut rng = thread_rng();
+                let mut counter = 0;
+                let mut last = -1;
+                let sleep_time = Duration::from_millis(rng.gen_range(0, 100));
+                debug!("												SLEEPING {}s {}ns", sleep_time.as_secs(), sleep_time.subsec_nanos());
                 thread::sleep(sleep_time);
                 debug!("												DONE SLEEPING");
 
@@ -836,13 +843,13 @@ mod test {
 
         for i in 0u64..50001 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as isize;
+            x.value = i as i32;
             debug!("Writing {} -----------------------------------------------------", i);
             t.write(x);
         }
 
         debug!("Exit write loop");
-        if rx.recv_opt().is_err() == true {panic!()}
+        if rx.recv().is_err() == true {panic!()}
         debug!("Recv_opt done");
         return;
         //
@@ -859,9 +866,9 @@ mod test {
         let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut counter = 0;
+                let mut last = -1;
                 for x in data.iter() {
                     //debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
                     assert!(last + 1 == x.value);
@@ -871,7 +878,7 @@ mod test {
                 }
 
                 if counter >= 1200 {
-                        return Err(());
+                    return Err(());
                 } else {
                     return Ok(());
                 }
@@ -884,9 +891,9 @@ mod test {
         let (tx2, rx2): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            event_processor2.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+            event_processor2.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut counter = 0;
+                let mut last = -1;
                 for x in data.iter() {
                     //debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
                     assert!(last + 1 == x.value);
@@ -907,13 +914,13 @@ mod test {
 
         for i in 0u64..1200 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as isize;
+            x.value = i as i32;
             //debug!("______Writing {}", i);
             t.write(x);
 
         }
-        if rx.recv_opt().is_err() == true {panic!()}
-        if rx2.recv_opt().is_err() == true {panic!()}
+        if rx.recv().is_err() == true {panic!()}
+        if rx2.recv().is_err() == true {panic!()}
 
     }
 
@@ -929,9 +936,9 @@ mod test {
         let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut counter = 0;
+                let mut last = -1;
                 for x in data.iter() {
                     //debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
                     assert!(last + 1 == x.value);
@@ -954,9 +961,9 @@ mod test {
         let (tx2, rx2): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            let mut last = -1;
-            event_processor2.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+            event_processor2.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut counter = 0;
+                let mut last = -1;
                 for x in data.iter() {
                     //debug!(">>>>>>>>>> last: {}, value: {}, -- {}", last, x.value, last + 1 == x.value);
                     assert!(last + 1 == x.value);
@@ -978,13 +985,13 @@ mod test {
 
         for i in 0..1200 {
             let mut x: TestSlot = Slot::new();
-            x.value = i as isize;
+            x.value = i as i32;
             //debug!("______Writing {}", i);
             t.write(x);
 
         }
-        rx.recv_opt();
-        rx2.recv_opt();
+        rx.recv();
+        rx2.recv();
 
     }
 
@@ -1004,11 +1011,11 @@ mod test {
         let start = precise_time_ns();
         let mut counter = 0;
         for i in 0..10000000 {
-            counter += rx_bench.recv();
+            counter += rx_bench.recv().ok().unwrap();
         }
         let end = precise_time_ns();
 
-        future.get();
+        future.join();
 
         error!("Channel: Total time: {}", (end-start) as f32 / 1000000f32);
         error!("Channel: ops/s: {}", 10000000f32 / ((end-start) as f32 / 1000000f32 / 1000f32));
@@ -1023,8 +1030,8 @@ mod test {
         let (tx, rx): (Sender<isize>, Receiver<isize>) = channel();
 
         let mut future = thread::spawn(move|| {
-            let mut counter = 0;
-            event_processor.start::<BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+            event_processor.start::<_, BusyWait>(|data: &[TestSlot]| -> Result<(),()> {
+                let mut counter = 0;
                 for _ in data.iter() {
                     counter += data[0].value;
                 }
@@ -1046,7 +1053,7 @@ mod test {
             t.write(s);
         }
 
-        rx.recv_opt();
+        rx.recv();
         let end = precise_time_ns();
 
 
@@ -1060,8 +1067,8 @@ mod test {
     fn bench_turbine_latency() {
         let path = Path::new("turbine_latency.csv");
         let mut file = match File::create(&path) {
-                Err(why) => panic!("couldn't create file: {}", why.desc),
-                Ok(file) => file
+            Err(why) => panic!("couldn't create file: {}", why),
+            Ok(file) => file,
         };
 
         let mut t: Turbine<TestSlotU64> = Turbine::new(1048576);
@@ -1069,12 +1076,11 @@ mod test {
 
         let event_processor = t.ep_finalize(e1);
         let (tx, rx): (Sender<Vec<u64>>, Receiver<Vec<u64>>) = channel();
+        let mut latencies = Vec::with_capacity(1000000);
 
         let mut future = thread::spawn(move|| {
-            let mut counter: isize = 0;
-            let mut latencies = Vec::with_capacity(1000000);
-
-            event_processor.start::<BusyWait>(|data: &[TestSlotU64]| -> Result<(),()> {
+            event_processor.start::<_, BusyWait>(|data: &[TestSlotU64]| -> Result<(),()> {
+                let mut counter: isize = 0;
                 for d in data.iter() {
                     let end = precise_time_ns();
                     let total = ((end - d.value) as i64).abs() as u64;
@@ -1085,11 +1091,10 @@ mod test {
                 }
 
                 if counter == 1000000 {
-                        return Err(());
+                    Err(())
                 } else {
-                    return Ok(());
+                    Ok(())
                 }
-
             });
             tx.send(latencies);
         });
@@ -1102,19 +1107,16 @@ mod test {
             unsafe { usleep(10); }	//sleep for 10 microseconds
         }
 
-        let latencies = match rx.recv_opt() {
+        let latencies = match rx.recv() {
             Ok(l) => l,
             Err(_) => panic!("No latencies were returned!")
         };
 
 
         for l in latencies.iter() {
-            match file.write_line(l.to_string().as_slice()) {
-        Err(why) => {
-            panic!("couldn't write to file: {}", why.desc)
-        },
-        Ok(_) => {}
-        }
+            if let Err(why) =  write!(file, "{}\n", l) {
+                panic!("couldn't write to file: {}", why);
+            }
         }
 
     }
@@ -1123,10 +1125,8 @@ mod test {
     #[test]
     fn bench_chan_latency() {
         let path = Path::new("chan_latency.csv");
-        let mut file = match File::create(&path) {
-                Err(why) => panic!("couldn't create file: {}", why.desc),
-                Ok(file) => file
-        };
+        let mut file = File::create(&path).unwrap_or_else(|why|
+            panic!("couldn't create file: {}", why));
 
         let (tx_bench, rx_bench): (Sender<u64>, Receiver<u64>) = channel();
 
@@ -1145,21 +1145,18 @@ mod test {
         for i in 0..1000000 {
             counter += 1;
             let end = precise_time_ns();
-            let start = rx_bench.recv();
+            let start = rx_bench.recv().ok().unwrap();
             let total = ((end - start) as i64).abs() as u64;	// because ticks can go backwards between different cores
             latencies.push(total);
             //error!("{}, {}, {}", start, end, total);
         }
 
         for l in latencies.iter() {
-            match file.write_line(l.to_string().as_slice()) {
-                Err(why) => {
-                        panic!("couldn't write to file: {}", why.desc)
-                },
-                Ok(_) => {}
+            if let Err(why) = write!(&mut file, "{}\n", &l) {
+                panic!("couldn't write to file: {}", why);
             }
         }
 
-        future.get();
+        future.join();
     }
 }

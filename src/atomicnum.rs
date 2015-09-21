@@ -9,6 +9,8 @@ pub struct AtomicNum<T> {
     v: UnsafeCell<T>,
 }
 
+unsafe impl<T> Sync for AtomicNum<T> { }
+
 impl<T> AtomicNum<T> {
     /// Create a new `AtomicUint`
     pub fn new(v: T) -> AtomicNum<T> {
