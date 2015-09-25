@@ -1,4 +1,3 @@
-
 use std::cell::UnsafeCell;
 use std::iter::repeat;
 
@@ -48,7 +47,10 @@ pub struct RingBuffer<T> {
     entries: UnsafeCell<Vec<T>>
 }
 
-impl<T: Slot + Send> RingBuffer<T> {
+unsafe impl<T: Slot> Send for RingBuffer<T> {}
+unsafe impl<T: Slot> Sync for RingBuffer<T> {}
+
+impl<T: Slot> RingBuffer<T> {
 
     pub fn new(size: usize) -> RingBuffer<T> {
         let entries: UnsafeCell<Vec<T>> = match size {
@@ -63,23 +65,19 @@ impl<T: Slot + Send> RingBuffer<T> {
     }
 
     pub fn get_capacity(&self) -> usize {
-        let v: *mut Vec<T> = unsafe { self.entries.get() };
+        let v: *mut Vec<T> = self.entries.get();
         unsafe { (*v).len() }
     }
 
     // Unsafe because we have no guarantees the caller won't invalidate this slot
     pub unsafe fn get(&self, from: usize, size: usize) -> &[T] {
         debug!("              RingBuffer get({}, {})", from, size);
-        let v : *mut Vec<T> = self.entries.get();
-        ::std::slice::from_raw_parts(v.offset(from), size)
+        &self.entries.get().as_ref().unwrap()[from .. from + size]
     }
 
     // Unsafe because we have no guarantees the caller won't invalidate this slot
     pub unsafe fn write(&self, position: usize, data: T) {
-        let v: *mut Vec<T> = self.entries.get();
-        let slot = v.get_mut(position);
-        drop(slot);
-        slot = data;
+        self.entries.get().as_mut().unwrap()[position] = data;
     }
 }
 
@@ -89,7 +87,7 @@ mod tests {
 
     use super::{RingBuffer, Slot};
 
-    #[deriving(Show)]
+    #[derive(Debug)]
     struct TestSlot;
 
     impl Slot for TestSlot {
@@ -104,13 +102,13 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn new_ringbuff_non_power_of_two() {
         let _: RingBuffer<TestSlot> = RingBuffer::new(5);
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn new_ringbuff_zero() {
         let _: RingBuffer<TestSlot> = RingBuffer::new(0);
     }

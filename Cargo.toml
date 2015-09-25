@@ -2,11 +2,16 @@
 
 name = "turbine"
 version = "0.1.0"
-authors = [ "zacharyjtong@gmail.com" ]
-desc = "Turbine - a high-performance, non-locking, inter-task communication library"
+authors = [ "zacharyjtong@gmail.com", "bogusandre@gmail.com" ]
+description = "Turbine - a high-performance, non-locking, inter-task communication library"
 license = "MIT/ASL2"
 
 [lib]
 
 name = "turbine"
-crate-types = [ "dylib" ]
+crate-type = [ "dylib" ]
+
+[dependencies]
+log = "*"
+time = "*"
+rand = "*"
