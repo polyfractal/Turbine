@@ -848,7 +848,7 @@ mod test {
         }
 
         debug!("Exit write loop");
-        if rx.recv().is_err() == true {panic!()}
+        assert!(!rx.recv().is_err());
         debug!("Recv_opt done");
         return;
         //
@@ -1144,7 +1144,11 @@ mod test {
             counter += 1;
             let end = precise_time_ns();
             let start = rx_bench.recv().ok().unwrap();
-            let total = ((end - start) as i64).abs() as u64;	// because ticks can go backwards between different cores
+            let total = if end > start { 
+                end - start
+            } else { 
+                start - end
+            };	// because ticks can go backwards between different cores
             latencies.push(total);
             //error!("{}, {}, {}", start, end, total);
         }
